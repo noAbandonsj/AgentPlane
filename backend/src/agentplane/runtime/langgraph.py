@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
 
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRequest, ModelResponse, wrap_model_call
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
     BaseMessage,
     HumanMessage,
-    SystemMessage,
 )
 from langchain_openai import ChatOpenAI
-from langgraph.graph import END, START, MessagesState, StateGraph
-from langgraph.prebuilt import ToolNode, tools_condition
 from pydantic import SecretStr
 
 from agentplane.config import Settings
@@ -69,24 +69,21 @@ class LangGraphRuntimeAdapter(AgentRuntimeAdapter):
             timeout=self.settings.model_timeout_seconds,
             max_retries=2,
         )
-        runnable_model = model.bind_tools(tools) if tools else model
 
-        async def call_model(state: MessagesState) -> dict[str, list[AIMessage]]:
-            messages = [SystemMessage(content=definition.instructions), *state["messages"]]
+        @wrap_model_call
+        async def limit_model_concurrency(
+            request: ModelRequest[Any],
+            handler: Callable[[ModelRequest[Any]], Awaitable[ModelResponse[Any]]],
+        ) -> ModelResponse[Any]:
             async with self._model_semaphore:
-                response = await runnable_model.ainvoke(messages)
-            return {"messages": [response]}
+                return await handler(request)
 
-        builder = StateGraph(MessagesState)
-        builder.add_node("agent", call_model)
-        builder.add_edge(START, "agent")
-        if tools:
-            builder.add_node("tools", ToolNode(tools))
-            builder.add_conditional_edges("agent", tools_condition, {"tools": "tools", END: END})
-            builder.add_edge("tools", "agent")
-        else:
-            builder.add_edge("agent", END)
-        return builder.compile()
+        return create_agent(
+            model=model,
+            tools=tools,
+            system_prompt=definition.instructions,
+            middleware=[limit_model_concurrency],
+        )
 
     @staticmethod
     def _input_messages(request: RuntimeRunRequest) -> list[BaseMessage]:
