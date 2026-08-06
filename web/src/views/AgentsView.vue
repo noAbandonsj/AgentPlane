@@ -26,7 +26,7 @@ const form = reactive({
 async function load() {
   loading.value = true
   try {
-    ;[agents.value, tools.value] = await Promise.all([api.listAgents(), api.listTools()])
+    ;[agents.value, tools.value] = await Promise.all([api.listAdminAgents(), api.listTools()])
   } catch (error) {
     ElMessage.error(errorMessage(error))
   } finally {
@@ -115,7 +115,7 @@ onMounted(load)
 <template>
   <section>
     <div class="page-toolbar">
-      <div><h2>Agent 定义</h2><p>编辑草稿、选择安全工具并发布不可变版本。</p></div>
+      <div><h2>Agent 定义</h2><p>声明 Agent 的工具能力上限；用户实际可用工具还需与个人授权取交集。</p></div>
       <el-button type="primary" :icon="Plus" @click="openCreate">新建 Agent</el-button>
     </div>
 
@@ -125,7 +125,7 @@ onMounted(load)
           <template #default="{ row }"><strong>{{ row.name }}</strong><div class="muted">{{ row.description || '暂无说明' }}</div></template>
         </el-table-column>
         <el-table-column prop="model_alias" label="模型别名" width="130" />
-        <el-table-column label="内置工具" min-width="180">
+        <el-table-column label="声明工具" min-width="180">
           <template #default="{ row }"><el-tag v-for="key in row.tool_keys" :key="key" size="small" type="info">{{ key }}</el-tag><span v-if="!row.tool_keys.length" class="muted">无</span></template>
         </el-table-column>
         <el-table-column label="发布状态" width="150">
@@ -147,7 +147,7 @@ onMounted(load)
         <el-form-item label="说明"><el-input v-model="form.description" type="textarea" :rows="2" maxlength="4000" show-word-limit /></el-form-item>
         <el-form-item label="系统指令" required><el-input v-model="form.instructions" type="textarea" :rows="8" maxlength="50000" show-word-limit /></el-form-item>
         <el-form-item label="模型别名"><el-input v-model="form.modelAlias" disabled /><div class="muted">首版只开放 default，真实模型从服务端环境变量读取。</div></el-form-item>
-        <el-form-item label="启用工具">
+        <el-form-item label="声明工具（能力上限）">
           <el-checkbox-group v-model="form.toolKeys">
             <el-checkbox v-for="tool in tools" :key="tool.key" :value="tool.key"><strong>{{ tool.name }}</strong><span class="muted"> — {{ tool.description }}</span></el-checkbox>
           </el-checkbox-group>
@@ -164,7 +164,7 @@ onMounted(load)
           <el-descriptions :column="1" border>
             <el-descriptions-item label="名称">{{ version.name }}</el-descriptions-item>
             <el-descriptions-item label="模型">{{ version.model_alias }}</el-descriptions-item>
-            <el-descriptions-item label="工具">{{ version.tool_keys.join('、') || '无' }}</el-descriptions-item>
+            <el-descriptions-item label="声明工具">{{ version.tool_keys.join('、') || '无' }}</el-descriptions-item>
             <el-descriptions-item label="系统指令"><div style="white-space: pre-wrap">{{ version.instructions }}</div></el-descriptions-item>
           </el-descriptions>
         </el-collapse-item>

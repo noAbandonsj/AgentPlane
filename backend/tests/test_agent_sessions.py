@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentplane.errors import ApiError
 from agentplane.identity import IdentityContext
-from agentplane.models import AppUser, Tenant
+from agentplane.models import AppUser, Tenant, UserAgentGrant, UserStatus
 from agentplane.schemas import AgentCreate, AgentPatch, SessionCreate
 from agentplane.services import (
     create_agent,
@@ -34,6 +34,14 @@ async def test_published_version_is_immutable_and_session_pins_version(
         ),
     )
     version_one = await publish_agent(db, identity, agent.id)
+    db.add(
+        UserAgentGrant(
+            tenant_id=identity.tenant_id,
+            user_id=identity.user_id,
+            agent_definition_id=agent.id,
+            granted_by=identity.user_id,
+        )
+    )
     session = await create_chat_session(
         db,
         identity,
@@ -77,7 +85,9 @@ async def test_tenant_filter_hides_other_tenant_agent(
             AppUser(
                 id=other_user_id,
                 tenant_id=other_tenant_id,
+                login_name="other-user",
                 display_name="其他用户",
+                status=UserStatus.ACTIVE,
             ),
         ]
     )

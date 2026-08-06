@@ -7,7 +7,8 @@ FastAPI API、独立 Agent Worker、PostgreSQL、Redis Streams、LangGraph 和 V
 
 ## 本地开发
 
-1. 从 `.env.example` 复制 `.env` 并配置模型接口。
+1. 从 `.env.example` 复制 `.env` 并配置模型接口。本地登录注册流程需要把
+   `AUTH_MODE` 设为 `local`；保留 `dev` 时继续使用受控的免登录开发管理员。
 2. 启动基础设施：
 
    ```powershell
@@ -44,6 +45,11 @@ FastAPI API、独立 Agent Worker、PostgreSQL、Redis Streams、LangGraph 和 V
 - OpenAPI：http://127.0.0.1:8000/docs
 - PostgreSQL：127.0.0.1:55432
 - Redis：127.0.0.1:56379
+
+使用 `AUTH_MODE=local` 首次打开 Web 时，在登录页进入“初始化管理员”；普通用户注册后
+状态为待审核，需要管理员在“用户与权限”页面启用账号，并配置可用 Agent 与工具授权。
+管理员自身运行 Agent 时也遵循同一套授权规则。该本地密码方案用于 MVP 和受控测试，
+不替代生产 OIDC/SSO。
 
 基础设施使用非标准宿主机端口，避免覆盖本机已有 PostgreSQL 或 Redis。可在 `.env`
 中通过 `POSTGRES_PORT` 和 `REDIS_PORT` 调整 Compose 映射，并同步修改连接 URL。

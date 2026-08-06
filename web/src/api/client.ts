@@ -3,11 +3,17 @@ import type {
   AgentCreate,
   AgentPatch,
   AgentVersion,
+  AuthLogin,
+  AuthRegister,
+  BootstrapStatus,
   Capability,
   Message,
   Run,
   Session,
   ToolMetadata,
+  User,
+  UserPermissions,
+  UserStatus,
 } from './types'
 
 interface ErrorEnvelope {
@@ -33,6 +39,7 @@ export class ApiClientError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     ...init,
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   })
   if (!response.ok) {
@@ -49,11 +56,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       envelope.error?.details,
     )
   }
+  if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
 
 export const api = {
+  bootstrapStatus: () => request<BootstrapStatus>('/auth/bootstrap-status'),
+  bootstrapAdmin: (payload: AuthRegister) =>
+    request<User>('/auth/bootstrap-admin', { method: 'POST', body: JSON.stringify(payload) }),
+  register: (payload: AuthRegister) =>
+    request<User>('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
+  login: (payload: AuthLogin) =>
+    request<User>('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  logout: () => request<void>('/auth/logout', { method: 'POST' }),
+  me: () => request<User>('/auth/me'),
   listAgents: () => request<Agent[]>('/agents'),
+  listAdminAgents: () => request<Agent[]>('/admin/agents'),
   createAgent: (payload: AgentCreate) =>
     request<Agent>('/agents', { method: 'POST', body: JSON.stringify(payload) }),
   patchAgent: (id: string, payload: AgentPatch) =>
@@ -77,6 +95,29 @@ export const api = {
     }),
   getRun: (runId: string) => request<Run>(`/runs/${runId}`),
   cancelRun: (runId: string) => request<Run>(`/runs/${runId}/cancel`, { method: 'POST' }),
+  listUsers: () => request<User[]>('/admin/users'),
+  updateUserStatus: (userId: string, status: UserStatus) =>
+    request<User>(`/admin/users/${userId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+  getUserPermissions: (userId: string) =>
+    request<UserPermissions>(`/admin/users/${userId}/permissions`),
+  replaceUserAgentGrants: (userId: string, agentIds: string[]) =>
+    request<UserPermissions>(`/admin/users/${userId}/agent-grants`, {
+      method: 'PUT',
+      body: JSON.stringify({ agent_ids: agentIds }),
+    }),
+  replaceUserToolGrants: (userId: string, toolKeys: string[]) =>
+    request<UserPermissions>(`/admin/users/${userId}/tool-grants`, {
+      method: 'PUT',
+      body: JSON.stringify({ tool_keys: toolKeys }),
+    }),
+  replaceUserPermissions: (userId: string, agentIds: string[], toolKeys: string[]) =>
+    request<UserPermissions>(`/admin/users/${userId}/permissions`, {
+      method: 'PUT',
+      body: JSON.stringify({ agent_ids: agentIds, tool_keys: toolKeys }),
+    }),
 }
 
 export function errorMessage(error: unknown): string {

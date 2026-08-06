@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from agentplane.config import Settings
 from agentplane.db import Base
 from agentplane.identity import IdentityContext
-from agentplane.models import AppUser, Tenant
+from agentplane.models import AppUser, Tenant, UserRole, UserStatus
 
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 USER_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -44,7 +44,10 @@ async def db() -> AsyncGenerator[AsyncSession]:
                 AppUser(
                     id=USER_ID,
                     tenant_id=TENANT_ID,
+                    login_name="test-admin",
                     display_name="测试用户",
+                    role=UserRole.ADMIN,
+                    status=UserStatus.ACTIVE,
                 ),
             ]
         )
@@ -56,7 +59,7 @@ async def db() -> AsyncGenerator[AsyncSession]:
 
 @pytest.fixture
 def identity() -> IdentityContext:
-    return IdentityContext(tenant_id=TENANT_ID, user_id=USER_ID)
+    return IdentityContext(tenant_id=TENANT_ID, user_id=USER_ID, role=UserRole.ADMIN)
 
 
 @pytest.fixture

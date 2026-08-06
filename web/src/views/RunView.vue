@@ -102,6 +102,7 @@ onBeforeUnmount(() => closeStream?.())
           <el-descriptions-item label="完成时间">{{ run.completed_at ? new Date(run.completed_at).toLocaleString() : '—' }}</el-descriptions-item>
           <el-descriptions-item label="输入 Token">{{ run.input_tokens ?? '—' }}</el-descriptions-item>
           <el-descriptions-item label="输出 Token">{{ run.output_tokens ?? '—' }}</el-descriptions-item>
+          <el-descriptions-item label="有效工具" :span="2">{{ run.effective_tool_keys.join('、') || '无' }}</el-descriptions-item>
         </el-descriptions>
         <h3>输入</h3><pre>{{ run.input_text }}</pre>
         <template v-if="run.output_text"><h3>输出</h3><pre>{{ run.output_text }}</pre></template>

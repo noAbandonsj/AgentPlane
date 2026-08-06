@@ -13,7 +13,16 @@ from agentplane.api.app import create_app
 from agentplane.config import Settings
 from agentplane.db import create_engine, create_session_factory
 from agentplane.identity import IdentityContext
-from agentplane.models import AppUser, RunEvent, RunStatus, Tenant
+from agentplane.models import (
+    AppUser,
+    RunEvent,
+    RunStatus,
+    Tenant,
+    UserAgentGrant,
+    UserRole,
+    UserStatus,
+    UserToolGrant,
+)
 from agentplane.queue import ensure_run_consumer_group, publish_outbox_batch
 from agentplane.runtime.fake import FakeRuntimeAdapter
 from agentplane.schemas import AgentCreate, RunCreate, SessionCreate
@@ -54,7 +63,7 @@ async def test_postgres_redis_worker_interruption_and_sse_replay() -> None:
         worker_reclaim_idle_ms=1000,
         sse_poll_seconds=0.1,
     )
-    identity = IdentityContext(tenant_id=tenant_id, user_id=user_id)
+    identity = IdentityContext(tenant_id=tenant_id, user_id=user_id, role=UserRole.ADMIN)
     engine = create_engine(settings)
     session_factory = create_session_factory(engine)
     redis: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
@@ -62,14 +71,17 @@ async def test_postgres_redis_worker_interruption_and_sse_replay() -> None:
     try:
         async with session_factory() as db:
             migration = await db.scalar(text("SELECT version_num FROM alembic_version"))
-            assert migration == "20260806_0002"
+            assert migration == "20260806_0003"
             db.add(Tenant(id=tenant_id, name="集成测试租户"))
             await db.flush()
             db.add(
                 AppUser(
                     id=user_id,
                     tenant_id=tenant_id,
+                    login_name="integration-admin",
                     display_name="集成测试用户",
+                    role=UserRole.ADMIN,
+                    status=UserStatus.ACTIVE,
                 )
             )
             await db.commit()
@@ -84,6 +96,22 @@ async def test_postgres_redis_worker_interruption_and_sse_replay() -> None:
                 ),
             )
             await publish_agent(db, identity, agent.id)
+            db.add_all(
+                [
+                    UserAgentGrant(
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        agent_definition_id=agent.id,
+                        granted_by=user_id,
+                    ),
+                    UserToolGrant(
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        tool_key="calculator.add",
+                        granted_by=user_id,
+                    ),
+                ]
+            )
             chat_session = await create_chat_session(
                 db,
                 identity,

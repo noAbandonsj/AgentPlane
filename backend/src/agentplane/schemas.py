@@ -6,7 +6,14 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agentplane.models import AgentLifecycle, MessageRole, RunStatus, SessionStatus
+from agentplane.models import (
+    AgentLifecycle,
+    MessageRole,
+    RunStatus,
+    SessionStatus,
+    UserRole,
+    UserStatus,
+)
 
 
 class ApiModel(BaseModel):
@@ -21,6 +28,89 @@ class ErrorBody(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorBody
+
+
+class AuthRegister(BaseModel):
+    login_name: str = Field(min_length=3, max_length=100, pattern=r"^[a-zA-Z0-9_.-]+$")
+    display_name: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=6, max_length=200)
+
+    @field_validator("login_name")
+    @classmethod
+    def normalize_login_name(cls, value: str) -> str:
+        return value.strip().casefold()
+
+    @field_validator("display_name")
+    @classmethod
+    def strip_display_name(cls, value: str) -> str:
+        return value.strip()
+
+
+class AuthLogin(BaseModel):
+    login_name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=200)
+
+    @field_validator("login_name")
+    @classmethod
+    def normalize_login_name(cls, value: str) -> str:
+        return value.strip().casefold()
+
+
+class UserRead(ApiModel):
+    id: UUID
+    login_name: str
+    display_name: str
+    role: UserRole
+    status: UserStatus
+    created_at: datetime
+    updated_at: datetime
+
+
+class BootstrapStatus(BaseModel):
+    required: bool
+
+
+class UserStatusPatch(BaseModel):
+    status: UserStatus
+
+
+class AgentGrantReplace(BaseModel):
+    agent_ids: list[UUID] = Field(default_factory=list, max_length=1000)
+
+    @field_validator("agent_ids")
+    @classmethod
+    def unique_agent_ids(cls, value: list[UUID]) -> list[UUID]:
+        return list(dict.fromkeys(value))
+
+
+class ToolGrantReplace(BaseModel):
+    tool_keys: list[str] = Field(default_factory=list, max_length=1000)
+
+    @field_validator("tool_keys")
+    @classmethod
+    def unique_tool_keys(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(value))
+
+
+class UserPermissionsRead(BaseModel):
+    user_id: UUID
+    agent_ids: list[UUID]
+    tool_keys: list[str]
+
+
+class UserPermissionsReplace(BaseModel):
+    agent_ids: list[UUID] = Field(default_factory=list, max_length=1000)
+    tool_keys: list[str] = Field(default_factory=list, max_length=1000)
+
+    @field_validator("agent_ids")
+    @classmethod
+    def unique_permission_agent_ids(cls, value: list[UUID]) -> list[UUID]:
+        return list(dict.fromkeys(value))
+
+    @field_validator("tool_keys")
+    @classmethod
+    def unique_permission_tool_keys(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(value))
 
 
 class AgentCreate(BaseModel):
@@ -150,6 +240,7 @@ class RunRead(ApiModel):
     trace_id: UUID
     status: RunStatus
     input_text: str
+    effective_tool_keys: list[str]
     output_text: str | None
     error_code: str | None
     error_message: str | None

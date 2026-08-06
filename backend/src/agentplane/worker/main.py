@@ -95,10 +95,15 @@ class AgentWorker:
 
     async def _load_request(self, db: AsyncSession, run: TaskRun) -> RuntimeRunRequest:
         version = await db.scalar(
-            select(AgentVersion).where(AgentVersion.id == run.agent_version_id)
+            select(AgentVersion).where(
+                AgentVersion.id == run.agent_version_id,
+                AgentVersion.tenant_id == run.tenant_id,
+            )
         )
         if version is None:
             raise RuntimeError("RUN_CONFIGURATION_MISSING")
+        snapshot_tool_keys = set(run.effective_tool_keys)
+        effective_tool_keys = [key for key in version.tool_keys if key in snapshot_tool_keys]
         stored_history = await list_runtime_history(db, run)
         history = tuple(
             RuntimeMessage(
@@ -117,7 +122,7 @@ class AgentWorker:
                 agent_version_id=version.id,
                 instructions=version.instructions,
                 model_alias=version.model_alias,
-                tool_keys=version.tool_keys,
+                tool_keys=effective_tool_keys,
             ),
             history=history,
         )

@@ -310,12 +310,16 @@ calculator.add(a, b)
 | 数据实体 | 用途 | 关键约束 |
 |---|---|---|
 | Tenant | 开发租户和未来租户管理基础 | 首版迁移写入固定开发租户 |
-| AppUser | 记录开发用户和审计主体 | 属于一个 Tenant |
+| AppUser | 记录登录用户、角色、状态和审计主体 | 属于一个 Tenant；登录名租户内唯一 |
+| LocalCredential | 保存本地登录凭据 | 只保存 PBKDF2 摘要，不保存明文密码 |
+| AuthSession | 保存本地 Cookie 会话 | 只保存随机令牌摘要，可过期、可撤销 |
+| UserAgentGrant | 保存用户可使用的 Agent | 用户、Agent 和授权人必须在同一 Tenant |
+| UserToolGrant | 保存用户被授予的工具 | 无授权默认无工具 |
 | AgentDefinition | 保存可编辑草稿 | 所有查询按 Tenant 隔离 |
 | AgentVersion | 保存发布快照 | 发布后不可修改；版本号递增 |
 | Session | 保存对话线程 | 固定 AgentVersion |
 | SessionMessage | 保存用户、助手和工具消息 | 按 Session 有序 |
-| TaskRun | 保存一次执行 | 同 Session 只允许一个非终态 Run |
+| TaskRun | 保存一次执行和有效工具快照 | 同 Session 只允许一个非终态 Run |
 | RunEvent | 保存规范化运行事件 | `run_id + sequence` 唯一 |
 | RunApproval | 预留人工审批 | 首版不产生正式记录 |
 | OutboxEvent | 事务任务投递 | 业务写入和待发布事件同一事务 |
@@ -332,17 +336,18 @@ calculator.add(a, b)
 
 ## 8. 身份与租户隔离
 
-第一版使用开发身份适配，不接企业 OIDC：
+第一版保留两种本地身份模式，不接企业 OIDC：
 
 ```text
-AUTH_MODE=dev
+AUTH_MODE=dev     # 受控开发身份，兼容原有免登录开发流程
+AUTH_MODE=local   # 登录名、密码和 HttpOnly Cookie 会话
 DEV_TENANT_ID=<固定开发租户>
 DEV_USER_ID=<固定开发用户>
 ```
 
-中间件从受控环境变量注入身份，不接受客户端传入任意 `tenant_id` 或 `user_id` 覆盖当前身份。测试可以通过依赖覆盖模拟多个租户。
+`dev` 模式由中间件从受控环境变量注入管理员身份，不接受客户端传入任意 `tenant_id` 或 `user_id`。`local` 模式提供首次管理员初始化、普通用户注册、管理员审核启停和 Cookie 登录；普通用户只能使用管理员授予的 Agent，Agent 管理和用户授权接口仅允许管理员访问。所有身份仍固定在当前开发租户边界内。
 
-开发认证仅用于本地环境。未来 OIDC 实现必须替换身份提供者，不改变领域服务和数据过滤接口。
+本地密码只做满足 MVP 的基础保护：PBKDF2 摘要、随机会话令牌、HttpOnly Cookie、过期与撤销，不实现找回密码、MFA、验证码、锁定策略或生产级风控。`local` 与 `dev` 都仅用于本地或受控测试环境；未来 OIDC 只替换身份提供者，不改变服务层的角色检查、租户过滤和授权交集。
 
 ## 9. 模型接入
 
@@ -425,11 +430,32 @@ run.cancelled
 
 API 统一使用 `/api/v1` 前缀。
 
-### 11.1 Agent
+### 11.1 身份
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| GET | `/agents` | 查询当前租户 Agent |
+| GET | `/auth/bootstrap-status` | 查询是否需要初始化首个管理员 |
+| POST | `/auth/bootstrap-admin` | 初始化首个本地管理员并登录 |
+| POST | `/auth/register` | 注册待管理员审核的普通用户 |
+| POST | `/auth/login` | 建立本地 Cookie 会话 |
+| POST | `/auth/logout` | 撤销当前会话 |
+| GET | `/auth/me` | 查询当前登录用户 |
+
+### 11.2 管理员授权
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| GET | `/admin/users` | 查询当前租户用户 |
+| PATCH | `/admin/users/{user_id}/status` | 审核、启用或停用用户 |
+| GET | `/admin/users/{user_id}/permissions` | 查询用户 Agent 与工具授权 |
+| PUT | `/admin/users/{user_id}/permissions` | 原子替换用户 Agent 与工具授权 |
+| GET | `/admin/agents` | 查询管理员可配置的租户 Agent |
+
+### 11.3 Agent
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| GET | `/agents` | 查询当前用户获授权的 Agent |
 | POST | `/agents` | 创建 Agent 草稿 |
 | GET | `/agents/{agent_id}` | 查询草稿及发布信息 |
 | PATCH | `/agents/{agent_id}` | 修改草稿 |
@@ -437,7 +463,7 @@ API 统一使用 `/api/v1` 前缀。
 | GET | `/agents/{agent_id}/versions` | 查询历史版本 |
 | GET | `/tools` | 查询代码注册的可用工具元数据 |
 
-### 11.2 Session 与消息
+### 11.4 Session 与消息
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
@@ -446,7 +472,7 @@ API 统一使用 `/api/v1` 前缀。
 | GET | `/sessions/{session_id}` | 查询会话详情 |
 | GET | `/sessions/{session_id}/messages` | 查询有序消息 |
 
-### 11.3 Run
+### 11.5 Run
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
@@ -457,7 +483,7 @@ API 统一使用 `/api/v1` 前缀。
 
 SSE 使用事件 sequence 作为 `id`，支持 `Last-Event-ID` 断线恢复，并定期发送 keepalive。所有非成功响应使用稳定错误码和用户可理解的中文提示。
 
-### 11.4 健康与能力
+### 11.6 健康与能力
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
@@ -471,22 +497,32 @@ SSE 使用事件 sequence 作为 `id`，支持 `Last-Event-ID` 断线恢复，�
 
 ### 12.1 页面
 
-首版提供三个中文页面：
+首版本地控制台提供五类中文页面：
 
-1. **Agent 管理**
+1. **登录与注册**
+   - 首次管理员初始化；
+   - 普通用户注册后等待管理员审核；
+   - 本地 Cookie 登录和退出。
+
+2. **用户与权限管理**
+   - 管理员审核、启用或停用用户；
+   - 配置用户可用 Agent 和工具授权；
+   - 明确展示 Agent 声明与用户授权取交集的规则。
+
+3. **Agent 管理**
    - 列表、新建和编辑草稿；
    - 选择内置工具；
    - 发布版本；
    - 查看历史版本和只读快照。
 
-2. **会话聊天**
+4. **会话聊天**
    - 选择已发布 Agent；
    - 创建 Session；
    - 发送消息并创建 Run；
    - SSE 增量展示输出和工具事件；
    - 显示模型未配置、连接中断和运行失败。
 
-3. **Run 详情**
+5. **Run 详情**
    - 当前状态、输入和最终输出；
    - 事件时间线；
    - 模型和工具调用摘要；
@@ -497,7 +533,7 @@ SSE 使用事件 sequence 作为 `id`，支持 `Last-Event-ID` 断线恢复，�
 
 Pinia 只保存：
 
-- 开发身份展示；
+- 当前登录身份和角色；
 - 当前导航；
 - 页面局部状态；
 - 非敏感能力状态。
@@ -647,17 +683,19 @@ Git Hook 只运行快速格式和基础 Lint，不能替代完整检查脚本。
 
 1. PostgreSQL 和 Redis 可通过 Compose 启动并通过健康检查；
 2. Alembic 可从空数据库升级到最新版本；
-3. API、Worker 和 Web 可在本地分别启动；
-4. 可以创建 Agent 草稿并发布不可变版本；
-5. 可以创建固定版本的 Session；
-6. 配置有效模型后，可以创建 Run；
-7. Run 经 Redis Streams 被 Worker 消费；
-8. 前端通过 SSE 观察 `QUEUED → RUNNING → SUCCEEDED` 和输出事件；
-9. 工具调用可记录并展示；
-10. 取消、失败和模型未配置均有稳定状态和提示；
-11. 跨租户访问测试通过；
-12. 后端静态检查、测试和前端构建通过；
-13. OpenAPI 生成类型没有漂移。
+3. 可以初始化管理员、注册普通用户并完成审核登录；
+4. 管理员可以配置用户的 Agent 与工具授权，普通用户不能进入管理页面；
+5. 可以创建 Agent 草稿并发布不可变版本；
+6. 用户只能创建获授权 Agent 的 Session 和 Run；
+7. Run 固定保存 `AgentVersion.tool_keys ∩ UserToolGrant` 权限快照；
+8. 配置有效模型后，可以创建 Run；
+9. Run 经 Redis Streams 被 Worker 消费；
+10. 前端通过 SSE 观察 `QUEUED → RUNNING → SUCCEEDED` 和输出事件；
+11. 工具调用可记录并展示；
+12. 取消、失败和模型未配置均有稳定状态和提示；
+13. 跨租户访问测试通过；
+14. 后端静态检查、测试和前端构建通过；
+15. OpenAPI 生成类型没有漂移。
 
 Docker Engine 当前探测曾超时；如果 Docker Desktop 未运行，可以先完成静态和单元测试，但 PostgreSQL、Redis、Worker 和 SSE 的完整集成验收必须在 Docker Engine 可用后执行。
 
@@ -666,7 +704,7 @@ Docker Engine 当前探测曾超时；如果 Docker Desktop 未运行，可以�
 第一版不实现：
 
 - 企业 OIDC/SSO；
-- RBAC 与 ABAC 管理；
+- 可配置的多角色 RBAC 与 ABAC 策略（首版只有固定 `ADMIN` / `USER` 两级角色）；
 - 数据权限策略引擎；
 - 审批页面和审批恢复闭环；
 - 模型注册与凭据管理页面；
@@ -686,6 +724,21 @@ Docker Engine 当前探测曾超时；如果 Docker Desktop 未运行，可以�
 ## 18. 后续演进路线
 
 后续演进的第一优先级是补齐用户可见功能和真实业务闭环，而不是继续预埋生产级可靠性机制。默认实施顺序为“功能实现 → 用户验收 → 根据真实故障和容量数据补鲁棒性”。除安全、租户隔离、数据一致性和不可逆操作保护外，不因假设中的未来规模提前引入自动恢复、复杂重试、额外中间件或分布式协调。
+
+### 用户级 Agent 与工具授权基线
+
+首版已经补齐“同一 Agent、不同用户具有不同工具权限”的基础闭环。采用最小权限交集模型：`AgentVersion.tool_keys` 表示 Agent 发布版本声明的能力上限，`user_tool_grants` 表示用户被授予的工具，实际可用工具为两者交集；`user_agent_grants` 另行决定用户能否看到并使用该 Agent。
+
+交集必须由服务端在 `create_run()` 事务内计算，并写入 `TaskRun.effective_tool_keys` 作为本次 Run 的权限快照。Worker 只消费并防御性收窄该快照，不接受前端传入工具权限，也不在执行时重新读取实时授权。这样可以保证 AgentVersion 上限不被突破，并避免执行中途因授权变化产生漂移。
+
+首版使用专用授权表，不提前泛化为通用 entitlement 模型；无授权默认无 Agent、无工具。管理员通过本地成员授权页维护权限，普通用户只进入使用页面。正式环境的身份校验和授权写操作仍需在 OIDC/RBAC 落地后由真实租户管理员权限接管。
+
+后续优化继续遵循“先功能、后鲁棒性”，建议按以下顺序推进：
+
+1. 先让真实用户验收注册、审核、Agent 授权、工具过滤和执行闭环；
+2. 按使用反馈补齐当前用户的有效权限预览、批量授权和授权审计查询；
+3. 知识库等新资源真正进入产品范围后，再复用同类交集授权，不提前抽象通用权限引擎；
+4. 出现真实生产接入需求后再建设 OIDC、密码策略、会话治理和可配置 RBAC。
 
 ### 阶段 2：企业治理基础
 
@@ -727,7 +780,8 @@ Docker Engine 当前探测曾超时；如果 Docker Desktop 未运行，可以�
 | 业务事实 | PostgreSQL | 状态、审计和重放必须持久化 |
 | 投递一致性 | Transactional Outbox | 避免数据库成功但任务丢失 |
 | 实时协议 | SSE | 服务端单向事件足够且实现简单 |
-| 多租户 | 开发身份 + 全表 tenant_id | 保留隔离边界，暂不接 OIDC |
+| 身份与授权 | 本地登录 + 固定 ADMIN/USER + 用户 Agent/工具授权 | 先跑通功能闭环，暂不接 OIDC 或通用 RBAC |
+| 多租户 | 固定开发租户 + 全表 tenant_id | 保留隔离边界，暂不开放租户选择 |
 | 审批 | 只预留模型与接口 | 避免首版范围膨胀 |
 | 启动方式 | 应用本地、基础设施 Compose | 保留热更新和调试效率 |
 | CI | 平台无关检查脚本 | 当前未确定代码托管平台 |

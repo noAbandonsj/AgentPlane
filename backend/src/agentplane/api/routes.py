@@ -19,6 +19,7 @@ from agentplane.api.deps import (
     get_identity,
     get_redis,
     get_session_factory,
+    require_admin,
 )
 from agentplane.config import Settings
 from agentplane.errors import ApiError
@@ -45,6 +46,7 @@ from agentplane.services import (
     create_agent,
     create_chat_session,
     create_run,
+    ensure_agent_access,
     get_agent,
     get_chat_session,
     get_run,
@@ -53,6 +55,7 @@ from agentplane.services import (
     list_messages,
     list_run_events_after,
     list_sessions,
+    list_tenant_agents,
     patch_agent,
     publish_agent,
 )
@@ -62,6 +65,7 @@ router = APIRouter(prefix="/api/v1")
 
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 IdentityDep = Annotated[IdentityContext, Depends(get_identity)]
+AdminIdentityDep = Annotated[IdentityContext, Depends(require_admin)]
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 RedisDep = Annotated[Redis, Depends(get_redis)]
 SessionFactoryDep = Annotated[async_sessionmaker[AsyncSession], Depends(get_session_factory)]
@@ -72,8 +76,15 @@ async def agents_list(db: DbDep, identity: IdentityDep) -> Sequence[AgentDefinit
     return await list_agents(db, identity)
 
 
+@router.get("/admin/agents", response_model=list[AgentRead])
+async def admin_agents_list(db: DbDep, identity: AdminIdentityDep) -> Sequence[AgentDefinition]:
+    return await list_tenant_agents(db, identity)
+
+
 @router.post("/agents", response_model=AgentRead, status_code=status.HTTP_201_CREATED)
-async def agents_create(payload: AgentCreate, db: DbDep, identity: IdentityDep) -> AgentDefinition:
+async def agents_create(
+    payload: AgentCreate, db: DbDep, identity: AdminIdentityDep
+) -> AgentDefinition:
     agent = await create_agent(db, identity, payload)
     try:
         await db.commit()
@@ -86,12 +97,14 @@ async def agents_create(payload: AgentCreate, db: DbDep, identity: IdentityDep) 
 
 @router.get("/agents/{agent_id}", response_model=AgentRead)
 async def agents_get(agent_id: UUID, db: DbDep, identity: IdentityDep) -> AgentDefinition:
-    return await get_agent(db, identity, agent_id)
+    agent = await get_agent(db, identity, agent_id)
+    await ensure_agent_access(db, identity, agent.id)
+    return agent
 
 
 @router.patch("/agents/{agent_id}", response_model=AgentRead)
 async def agents_patch(
-    agent_id: UUID, payload: AgentPatch, db: DbDep, identity: IdentityDep
+    agent_id: UUID, payload: AgentPatch, db: DbDep, identity: AdminIdentityDep
 ) -> AgentDefinition:
     agent = await patch_agent(db, identity, agent_id, payload)
     try:
@@ -108,7 +121,7 @@ async def agents_patch(
     response_model=AgentVersionRead,
     status_code=status.HTTP_201_CREATED,
 )
-async def agents_publish(agent_id: UUID, db: DbDep, identity: IdentityDep) -> AgentVersion:
+async def agents_publish(agent_id: UUID, db: DbDep, identity: AdminIdentityDep) -> AgentVersion:
     version = await publish_agent(db, identity, agent_id)
     await db.commit()
     await db.refresh(version)
@@ -117,13 +130,13 @@ async def agents_publish(agent_id: UUID, db: DbDep, identity: IdentityDep) -> Ag
 
 @router.get("/agents/{agent_id}/versions", response_model=list[AgentVersionRead])
 async def agents_versions(
-    agent_id: UUID, db: DbDep, identity: IdentityDep
+    agent_id: UUID, db: DbDep, identity: AdminIdentityDep
 ) -> Sequence[AgentVersion]:
     return await list_agent_versions(db, identity, agent_id)
 
 
 @router.get("/tools", response_model=list[ToolMetadata])
-async def tools_list() -> list[ToolMetadata]:
+async def tools_list(_identity: IdentityDep) -> list[ToolMetadata]:
     return list_tool_metadata()
 
 
@@ -291,7 +304,7 @@ async def health_ready(db: DbDep, redis: RedisDep) -> HealthResponse:
 
 
 @router.get("/capabilities", response_model=CapabilityResponse)
-async def capabilities(settings: SettingsDep) -> CapabilityResponse:
+async def capabilities(settings: SettingsDep, _identity: IdentityDep) -> CapabilityResponse:
     return CapabilityResponse(
         runtime="langgraph",
         model_configured=settings.model_configured,

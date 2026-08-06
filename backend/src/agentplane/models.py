@@ -12,6 +12,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -37,6 +38,17 @@ class AgentLifecycle(StrEnum):
 class SessionStatus(StrEnum):
     ACTIVE = "ACTIVE"
     ARCHIVED = "ARCHIVED"
+
+
+class UserRole(StrEnum):
+    ADMIN = "ADMIN"
+    USER = "USER"
+
+
+class UserStatus(StrEnum):
+    PENDING = "PENDING"
+    ACTIVE = "ACTIVE"
+    DISABLED = "DISABLED"
 
 
 class MessageRole(StrEnum):
@@ -82,19 +94,67 @@ class Tenant(Base, TimestampMixin):
 
 class AppUser(Base, TimestampMixin):
     __tablename__ = "app_users"
-    __table_args__ = (UniqueConstraint("tenant_id", "id", name="uq_app_users_tenant_id_id"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_app_users_tenant_id_id"),
+        UniqueConstraint("tenant_id", "login_name", name="uq_app_users_tenant_login_name"),
+    )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     tenant_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    login_name: Mapped[str] = mapped_column(String(100), nullable=False)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    role: Mapped[UserRole] = mapped_column(
+        SAEnum(UserRole, native_enum=False, length=20), nullable=False, default=UserRole.USER
+    )
+    status: Mapped[UserStatus] = mapped_column(
+        SAEnum(UserStatus, native_enum=False, length=20),
+        nullable=False,
+        default=UserStatus.PENDING,
+    )
+
+
+class LocalCredential(Base, TimestampMixin):
+    __tablename__ = "local_credentials"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "user_id"],
+            ["app_users.tenant_id", "app_users.id"],
+            ondelete="CASCADE",
+        ),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "user_id"],
+            ["app_users.tenant_id", "app_users.id"],
+            ondelete="CASCADE",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+    user_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class AgentDefinition(Base, TimestampMixin):
     __tablename__ = "agent_definitions"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_agent_definitions_tenant_id_id"),
         UniqueConstraint("tenant_id", "name", name="uq_agent_definitions_tenant_name"),
     )
 
@@ -150,6 +210,57 @@ class AgentVersion(Base):
     definition: Mapped[AgentDefinition] = relationship(
         back_populates="versions", foreign_keys=[agent_definition_id]
     )
+
+
+class UserAgentGrant(Base):
+    __tablename__ = "user_agent_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "user_id"],
+            ["app_users.tenant_id", "app_users.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_definition_id"],
+            ["agent_definitions.tenant_id", "agent_definitions.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "granted_by"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    agent_definition_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    granted_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class UserToolGrant(Base):
+    __tablename__ = "user_tool_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "user_id"],
+            ["app_users.tenant_id", "app_users.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "granted_by"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tool_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    granted_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class ChatSession(Base, TimestampMixin):
@@ -233,6 +344,7 @@ class TaskRun(Base):
         default=RunStatus.QUEUED,
     )
     input_text: Mapped[str] = mapped_column(Text, nullable=False)
+    effective_tool_keys: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     output_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

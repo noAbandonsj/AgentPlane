@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     auth_mode: str = "dev"
     dev_tenant_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
     dev_user_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
+    auth_cookie_name: str = "agentplane_session"
+    auth_session_hours: int = Field(default=24, ge=1, le=720)
+    password_pbkdf2_iterations: int = Field(default=120000, ge=10000, le=1000000)
 
     database_url: str = (
         "postgresql+psycopg://agentplane:agentplane_dev_2026@127.0.0.1:55432/agentplane"

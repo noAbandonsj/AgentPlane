@@ -1,5 +1,15 @@
 import { expect, test } from '@playwright/test'
 
+const adminUser = {
+  id: '00000000-0000-0000-0000-000000000001',
+  login_name: 'admin',
+  display_name: '本地管理员',
+  role: 'ADMIN',
+  status: 'ACTIVE',
+  created_at: '2026-08-05T08:00:00Z',
+  updated_at: '2026-08-05T08:00:00Z',
+}
+
 const agent = {
   id: '10000000-0000-0000-0000-000000000001',
   name: '企业演示助手',
@@ -13,8 +23,97 @@ const agent = {
   updated_at: '2026-08-05T08:00:00Z',
 }
 
+const normalUser = {
+  id: '00000000-0000-0000-0000-000000000002',
+  login_name: 'normal-user',
+  display_name: '普通用户',
+  role: 'USER',
+  status: 'ACTIVE',
+  created_at: '2026-08-05T08:00:00Z',
+  updated_at: '2026-08-05T08:00:00Z',
+}
+
+test('普通用户注册后进入待审核提示', async ({ page }) => {
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill({
+      status: 401,
+      json: {
+        error: { code: 'AUTHENTICATION_REQUIRED', message: '请先登录', details: {} },
+      },
+    }),
+  )
+  await page.route('**/api/v1/auth/bootstrap-status', (route) =>
+    route.fulfill({ json: { required: false } }),
+  )
+  await page.route('**/api/v1/auth/register', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({
+      login_name: 'normal-user',
+      display_name: '普通用户',
+      password: 'secret1',
+    })
+    await route.fulfill({ status: 201, json: { ...normalUser, status: 'PENDING' } })
+  })
+
+  await page.goto('/register')
+  await page.getByLabel('登录名').fill('normal-user')
+  await page.getByLabel('显示名称').fill('普通用户')
+  await page.getByLabel('密码', { exact: true }).fill('secret1')
+  await page.getByLabel('确认密码').fill('secret1')
+  await page.getByRole('button', { name: '提交注册' }).click()
+  await expect(page.getByText('注册成功，请等待管理员审核后登录')).toBeVisible()
+})
+
+test('管理员可配置用户的 Agent 与工具权限', async ({ page }) => {
+  let savedPermissions: unknown
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill({ json: adminUser }))
+  await page.route('**/api/v1/admin/users', (route) =>
+    route.fulfill({ json: [normalUser] }),
+  )
+  await page.route('**/api/v1/admin/agents', (route) => route.fulfill({ json: [agent] }))
+  await page.route('**/api/v1/tools', (route) =>
+    route.fulfill({
+      json: [
+        {
+          key: 'calculator.add',
+          name: '加法计算器',
+          description: '对两个整数执行加法',
+          risk_level: 'LOW',
+          requires_approval: false,
+        },
+      ],
+    }),
+  )
+  await page.route(`**/api/v1/admin/users/${normalUser.id}/permissions`, async (route) => {
+    if (route.request().method() === 'PUT') {
+      savedPermissions = route.request().postDataJSON()
+      await route.fulfill({
+        json: {
+          user_id: normalUser.id,
+          ...(savedPermissions as { agent_ids: string[]; tool_keys: string[] }),
+        },
+      })
+      return
+    }
+    await route.fulfill({
+      json: { user_id: normalUser.id, agent_ids: [], tool_keys: [] },
+    })
+  })
+
+  await page.goto('/admin/users')
+  await expect(page.getByRole('heading', { name: '普通用户' })).toBeVisible()
+  await page.locator('.el-checkbox').filter({ hasText: '企业演示助手' }).click()
+  await page.locator('.el-checkbox').filter({ hasText: '加法计算器' }).click()
+  await page.getByRole('button', { name: '保存权限' }).click()
+  await expect.poll(() => savedPermissions).toEqual({
+    agent_ids: [agent.id],
+    tool_keys: ['calculator.add'],
+  })
+  await expect(page.getByText('用户权限已保存')).toBeVisible()
+})
+
 test('管理页展示已发布 Agent 并可查看版本', async ({ page }) => {
-  await page.route('**/api/v1/agents', (route) => route.fulfill({ json: [agent] }))
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill({ json: adminUser }))
+  await page.route('**/api/v1/admin/agents', (route) => route.fulfill({ json: [agent] }))
   await page.route('**/api/v1/tools', (route) =>
     route.fulfill({
       json: [
@@ -99,6 +198,7 @@ test('会话页消费 SSE 增量并展示终态', async ({ page }) => {
     trace_id: traceId,
     status: 'RUNNING',
     input_text: '20 + 22 等于多少？',
+    effective_tool_keys: ['calculator.add'],
     output_text: null,
     error_code: null,
     error_message: null,
@@ -113,6 +213,7 @@ test('会话页消费 SSE 增量并展示终态', async ({ page }) => {
     updated_at: '2026-08-05T08:00:01Z',
   }
 
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill({ json: adminUser }))
   await page.route('**/api/v1/agents', (route) => route.fulfill({ json: [agent] }))
   await page.route('**/api/v1/sessions', (route) => route.fulfill({ json: [session] }))
   await page.route('**/api/v1/capabilities', (route) =>

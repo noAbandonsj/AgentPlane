@@ -23,6 +23,8 @@ from agentplane.models import (
     SessionMessage,
     SessionStatus,
     TaskRun,
+    UserAgentGrant,
+    UserToolGrant,
 )
 from agentplane.schemas import AgentCreate, AgentPatch, RunCreate, SessionCreate
 from agentplane.tools import validate_tool_keys
@@ -39,6 +41,25 @@ def _not_found(resource: str) -> ApiError:
 
 
 async def list_agents(db: AsyncSession, identity: IdentityContext) -> Sequence[AgentDefinition]:
+    result = await db.scalars(
+        select(AgentDefinition)
+        .join(
+            UserAgentGrant,
+            (UserAgentGrant.tenant_id == AgentDefinition.tenant_id)
+            & (UserAgentGrant.agent_definition_id == AgentDefinition.id),
+        )
+        .where(
+            AgentDefinition.tenant_id == identity.tenant_id,
+            UserAgentGrant.user_id == identity.user_id,
+        )
+        .order_by(AgentDefinition.updated_at.desc())
+    )
+    return result.all()
+
+
+async def list_tenant_agents(
+    db: AsyncSession, identity: IdentityContext
+) -> Sequence[AgentDefinition]:
     result = await db.scalars(
         select(AgentDefinition)
         .where(AgentDefinition.tenant_id == identity.tenant_id)
@@ -64,6 +85,18 @@ async def get_agent(
     if agent is None:
         raise _not_found("Agent")
     return agent
+
+
+async def ensure_agent_access(db: AsyncSession, identity: IdentityContext, agent_id: UUID) -> None:
+    grant = await db.scalar(
+        select(UserAgentGrant.agent_definition_id).where(
+            UserAgentGrant.tenant_id == identity.tenant_id,
+            UserAgentGrant.user_id == identity.user_id,
+            UserAgentGrant.agent_definition_id == agent_id,
+        )
+    )
+    if grant is None:
+        raise ApiError(403, "AGENT_NOT_GRANTED", "当前用户未获得该 Agent 的使用权限")
 
 
 async def create_agent(
@@ -208,6 +241,7 @@ async def create_chat_session(
     db: AsyncSession, identity: IdentityContext, payload: SessionCreate
 ) -> ChatSession:
     agent = await get_agent(db, identity, payload.agent_id)
+    await ensure_agent_access(db, identity, agent.id)
     if agent.lifecycle != AgentLifecycle.ACTIVE or agent.latest_published_version_id is None:
         raise ApiError(409, "AGENT_NOT_PUBLISHED", "Agent 尚未发布可用版本")
     version = await db.scalar(
@@ -274,8 +308,6 @@ async def create_run(
     payload: RunCreate,
     settings: Settings,
 ) -> TaskRun:
-    if not settings.model_configured:
-        raise ApiError(503, "MODEL_NOT_CONFIGURED", "模型接口尚未配置")
     chat_session = await get_chat_session(db, identity, session_id, for_update=True)
     if chat_session.status != SessionStatus.ACTIVE:
         raise ApiError(409, "SESSION_ARCHIVED", "已归档会话不能创建 Run")
@@ -289,6 +321,29 @@ async def create_run(
     if active_run is not None:
         raise ApiError(409, "ACTIVE_RUN_EXISTS", "当前会话已有运行中的 Run")
 
+    await ensure_agent_access(db, identity, chat_session.agent_definition_id)
+    if not settings.model_configured:
+        raise ApiError(503, "MODEL_NOT_CONFIGURED", "模型接口尚未配置")
+    version = await db.scalar(
+        select(AgentVersion).where(
+            AgentVersion.id == chat_session.agent_version_id,
+            AgentVersion.tenant_id == identity.tenant_id,
+        )
+    )
+    if version is None:
+        raise ApiError(409, "AGENT_VERSION_MISSING", "Agent 发布版本不存在")
+    granted_tool_keys = set(
+        (
+            await db.scalars(
+                select(UserToolGrant.tool_key).where(
+                    UserToolGrant.tenant_id == identity.tenant_id,
+                    UserToolGrant.user_id == identity.user_id,
+                )
+            )
+        ).all()
+    )
+    effective_tool_keys = [key for key in version.tool_keys if key in granted_tool_keys]
+
     run = TaskRun(
         id=uuid4(),
         tenant_id=identity.tenant_id,
@@ -297,6 +352,7 @@ async def create_run(
         agent_definition_id=chat_session.agent_definition_id,
         agent_version_id=chat_session.agent_version_id,
         input_text=payload.input,
+        effective_tool_keys=effective_tool_keys,
         model_name=settings.model_name,
     )
     message = SessionMessage(

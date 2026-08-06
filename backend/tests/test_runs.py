@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agentplane.config import Settings
 from agentplane.errors import ApiError
 from agentplane.identity import IdentityContext
-from agentplane.models import ChatSession, MessageRole, RunStatus
+from agentplane.models import ChatSession, MessageRole, RunStatus, UserAgentGrant
 from agentplane.schemas import AgentCreate, RunCreate, SessionCreate
 from agentplane.services import (
     cancel_run,
@@ -29,6 +29,14 @@ async def _published_session(db: AsyncSession, identity: IdentityContext) -> Cha
         AgentCreate(name="运行测试助手", instructions="回答测试问题"),
     )
     await publish_agent(db, identity, agent.id)
+    db.add(
+        UserAgentGrant(
+            tenant_id=identity.tenant_id,
+            user_id=identity.user_id,
+            agent_definition_id=agent.id,
+            granted_by=identity.user_id,
+        )
+    )
     chat_session = await create_chat_session(
         db,
         identity,
