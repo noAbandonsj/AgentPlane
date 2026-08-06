@@ -75,4 +75,5 @@ pnpm test:e2e
 `scripts/check.py` 会检查 OpenAPI 及 TypeScript 生成文件是否漂移；集成测试和浏览器
 测试因依赖本机服务与浏览器，使用上面的命令显式执行。
 
-当前仓库只初始化本地 Git，不包含远端、提交或推送。
+仓库已绑定远端 `https://github.com/noAbandonsj/AgentPlane.git`，`main` 分支跟踪
+`origin/main`。

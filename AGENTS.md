@@ -25,7 +25,7 @@ Use pytest/pytest-asyncio for backend tests, Vitest for frontend units, and Play
 
 ## Commit & Pull Request Guidelines
 
-The repository has no commit history yet. Use Conventional Commit-style messages such as `feat(runtime): add tool authorization` or `fix(sse): preserve replay sequence`. Keep commits scoped and do not include `.env`, credentials, generated build output, or unrelated changes. Pull requests should describe behavior and migration impact, link the issue, list verification commands, and include screenshots for UI changes.
+Use Conventional Commit-style messages such as `feat(runtime): add tool authorization` or `fix(sse): preserve replay sequence`. Keep commits scoped and do not include `.env`, credentials, generated build output, or unrelated changes. Pull requests should describe behavior and migration impact, link the issue, list verification commands, and include screenshots for UI changes.
 
 ## Security & Configuration
 
