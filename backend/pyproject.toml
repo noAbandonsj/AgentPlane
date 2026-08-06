@@ -1,0 +1,75 @@
+[project]
+name = "agentplane"
+version = "0.1.0"
+description = "Enterprise agent control and runtime platform skeleton"
+readme = "../README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "alembic>=1.16,<2",
+  "fastapi>=0.116,<1",
+  "langchain>=1.0,<2",
+  "langchain-openai>=1.0,<2",
+  "langgraph>=1.0,<2",
+  "langgraph-checkpoint-postgres>=3.0,<4",
+  "orjson>=3.10,<4",
+  "psycopg[binary,pool]>=3.2,<4",
+  "pydantic-settings>=2.10,<3",
+  "redis[hiredis]>=6.2,<7",
+  "sqlalchemy[asyncio]>=2.0,<3",
+  "structlog>=25.4,<26",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.scripts]
+agentplane-api = "agentplane.api.app:run"
+agentplane-worker = "agentplane.worker.main:run"
+agentplane-export-openapi = "agentplane.openapi:run"
+
+[dependency-groups]
+dev = [
+  "aiosqlite>=0.21,<1",
+  "httpx>=0.28,<1",
+  "pre-commit>=4.2,<5",
+  "pyright>=1.1.403,<2",
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.1,<2",
+  "pytest-cov>=6.2,<7",
+  "ruff>=0.12,<1",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentplane"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+ignore = ["B008", "RUF001"]
+
+[tool.ruff.lint.per-file-ignores]
+"migrations/versions/*.py" = ["E501"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+include = ["src", "tests"]
+exclude = ["migrations"]
+reportMissingTypeStubs = false
+reportUnknownArgumentType = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q --strict-markers --disable-warnings"
+markers = [
+  "integration: requires PostgreSQL and Redis",
+]

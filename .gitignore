@@ -1,0 +1,39 @@
+# Environment and secrets
+.env
+.env.local
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Frontend
+node_modules/
+web/dist/
+web/coverage/
+web/playwright-report/
+web/test-results/
+
+# Runtime and local data
+*.log
+.cache/
+.tmp/
+postgres-data/
+redis-data/
+dump.rdb
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

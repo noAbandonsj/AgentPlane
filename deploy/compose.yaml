@@ -1,0 +1,38 @@
+name: agentplane
+
+services:
+  postgres:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_DB: agentplane
+      POSTGRES_USER: agentplane
+      POSTGRES_PASSWORD: agentplane_dev_2026
+      TZ: UTC
+    ports:
+      - "${POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - agentplane_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentplane -d agentplane"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4.5-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "${REDIS_PORT:-56379}:6379"
+    volumes:
+      - agentplane_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  agentplane_postgres:
+  agentplane_redis:
