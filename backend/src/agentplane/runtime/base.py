@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 
@@ -17,13 +17,19 @@ class RuntimeDefinition:
 
 
 @dataclass(frozen=True, slots=True)
+class RuntimeMessage:
+    role: Literal["user", "assistant"]
+    content: str
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeRunRequest:
     run_id: UUID
     session_id: UUID
-    runtime_thread_id: UUID
     trace_id: UUID
     input_text: str
     definition: RuntimeDefinition
+    history: tuple[RuntimeMessage, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

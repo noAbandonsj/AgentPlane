@@ -245,6 +245,21 @@ async def list_messages(
     return messages.all()
 
 
+async def list_runtime_history(db: AsyncSession, run: TaskRun) -> Sequence[SessionMessage]:
+    messages = await db.scalars(
+        select(SessionMessage)
+        .join(TaskRun, SessionMessage.run_id == TaskRun.id)
+        .where(
+            SessionMessage.tenant_id == run.tenant_id,
+            SessionMessage.session_id == run.session_id,
+            SessionMessage.role.in_((MessageRole.USER, MessageRole.ASSISTANT)),
+            TaskRun.status == RunStatus.SUCCEEDED,
+        )
+        .order_by(SessionMessage.sequence.asc())
+    )
+    return messages.all()
+
+
 async def next_message_sequence(db: AsyncSession, session_id: UUID) -> int:
     maximum = await db.scalar(
         select(func.max(SessionMessage.sequence)).where(SessionMessage.session_id == session_id)
@@ -399,16 +414,6 @@ async def mark_run_started(db: AsyncSession, run: TaskRun) -> RunEvent | None:
         run.attempt_count += 1
         return await append_run_event(db, run, "run.started", {"attempt": run.attempt_count})
     return None
-
-
-async def mark_run_recovered(db: AsyncSession, run: TaskRun) -> RunEvent:
-    run.attempt_count += 1
-    return await append_run_event(
-        db,
-        run,
-        "run.started",
-        {"attempt": run.attempt_count, "recovered": True},
-    )
 
 
 async def mark_run_succeeded(

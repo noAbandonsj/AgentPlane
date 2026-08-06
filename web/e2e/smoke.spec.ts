@@ -85,7 +85,6 @@ test('会话页消费 SSE 增量并展示终态', async ({ page }) => {
     user_id: '00000000-0000-0000-0000-000000000001',
     agent_definition_id: agent.id,
     agent_version_id: agent.latest_published_version_id,
-    runtime_thread_id: '60000000-0000-0000-0000-000000000001',
     title: '计算演示会话',
     status: 'ACTIVE',
     created_at: '2026-08-05T08:00:00Z',

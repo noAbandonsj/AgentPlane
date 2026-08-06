@@ -145,7 +145,7 @@ onBeforeUnmount(() => closeStream?.())
 
     <main class="surface conversation-panel">
       <header class="conversation-header">
-        <div><strong>{{ selectedSession?.title ?? '请选择或创建会话' }}</strong><span v-if="selectedSession" class="mono">thread {{ selectedSession.runtime_thread_id.slice(0, 8) }}</span></div>
+        <div><strong>{{ selectedSession?.title ?? '请选择或创建会话' }}</strong></div>
         <div v-if="currentRun" class="run-link"><RunStatusTag :status="currentRun.status" /><el-button text :icon="View" @click="router.push(`/runs/${currentRun.id}`)">Run 详情</el-button></div>
       </header>
 

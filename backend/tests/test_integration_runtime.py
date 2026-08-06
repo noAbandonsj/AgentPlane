@@ -37,7 +37,7 @@ pytestmark = [
 ]
 
 
-async def test_postgres_redis_worker_recovery_and_sse_replay() -> None:
+async def test_postgres_redis_worker_interruption_and_sse_replay() -> None:
     tenant_id = uuid4()
     user_id = uuid4()
     stream_name = f"agentplane:test:runs:{uuid4()}"
@@ -62,7 +62,7 @@ async def test_postgres_redis_worker_recovery_and_sse_replay() -> None:
     try:
         async with session_factory() as db:
             migration = await db.scalar(text("SELECT version_num FROM alembic_version"))
-            assert migration == "20260805_0001"
+            assert migration == "20260806_0002"
             db.add(Tenant(id=tenant_id, name="集成测试租户"))
             await db.flush()
             db.add(
@@ -156,11 +156,11 @@ async def test_postgres_redis_worker_recovery_and_sse_replay() -> None:
                 )
             ) == event_count
 
-            recovery_run = await create_run(
+            interrupted_run = await create_run(
                 db,
                 identity,
                 chat_session.id,
-                RunCreate(input="恢复执行"),
+                RunCreate(input="中断执行"),
                 settings,
             )
             await db.commit()
@@ -172,23 +172,24 @@ async def test_postgres_redis_worker_recovery_and_sse_replay() -> None:
             {stream_name: ">"},
             count=1,
         )
-        recovery_message_id, _recovery_fields = claimed_by_dead_worker[0][1][0]
+        interruption_message_id, _interruption_fields = claimed_by_dead_worker[0][1][0]
         async with session_factory() as db:
-            running = await get_run_for_worker(db, recovery_run.id, for_update=True)
+            running = await get_run_for_worker(db, interrupted_run.id, for_update=True)
             assert running is not None
-            running.dispatch_message_id = recovery_message_id
+            running.dispatch_message_id = interruption_message_id
             await mark_run_started(db, running)
             await db.commit()
 
         await asyncio.sleep(1.1)
         reclaimed = await worker._reclaim_pending()  # pyright: ignore[reportPrivateUsage]
-        assert reclaimed and reclaimed[0][0] == recovery_message_id
+        assert reclaimed and reclaimed[0][0] == interruption_message_id
         await worker.process_message(*reclaimed[0])
         async with session_factory() as db:
-            recovered = await get_run_for_worker(db, recovery_run.id)
-            assert recovered is not None
-            assert recovered.status == RunStatus.SUCCEEDED
-            assert recovered.attempt_count == 2
+            interrupted = await get_run_for_worker(db, interrupted_run.id)
+            assert interrupted is not None
+            assert interrupted.status == RunStatus.FAILED
+            assert interrupted.error_code == "WORKER_INTERRUPTED"
+            assert interrupted.attempt_count == 1
 
         app = create_app(settings)
         async with app.router.lifespan_context(app):

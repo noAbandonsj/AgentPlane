@@ -112,7 +112,6 @@ class SessionRead(ApiModel):
     user_id: UUID
     agent_definition_id: UUID
     agent_version_id: UUID
-    runtime_thread_id: UUID
     title: str
     status: SessionStatus
     created_at: datetime

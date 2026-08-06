@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agentplane.config import Settings
 from agentplane.errors import ApiError
 from agentplane.identity import IdentityContext
-from agentplane.models import ChatSession, RunStatus
+from agentplane.models import ChatSession, MessageRole, RunStatus
 from agentplane.schemas import AgentCreate, RunCreate, SessionCreate
 from agentplane.services import (
     cancel_run,
@@ -14,6 +14,8 @@ from agentplane.services import (
     create_chat_session,
     create_run,
     list_run_events_after,
+    list_runtime_history,
+    mark_run_failed,
     mark_run_started,
     mark_run_succeeded,
     publish_agent,
@@ -120,3 +122,47 @@ async def test_queued_run_cancels_immediately(
     assert event is not None
     assert event.sequence == 1
     assert event.event_type == "run.cancelled"
+
+
+async def test_runtime_history_uses_only_successful_run_messages(
+    db: AsyncSession,
+    identity: IdentityContext,
+    configured_settings: Settings,
+) -> None:
+    chat_session = await _published_session(db, identity)
+    successful_run = await create_run(
+        db,
+        identity,
+        chat_session.id,
+        RunCreate(input="成功的问题"),
+        configured_settings,
+    )
+    await mark_run_started(db, successful_run)
+    await mark_run_succeeded(db, successful_run, "成功的回答")
+    await db.commit()
+
+    failed_run = await create_run(
+        db,
+        identity,
+        chat_session.id,
+        RunCreate(input="失败的问题"),
+        configured_settings,
+    )
+    await mark_run_started(db, failed_run)
+    await mark_run_failed(db, failed_run, "TEST_FAILURE", "测试失败")
+    await db.commit()
+
+    current_run = await create_run(
+        db,
+        identity,
+        chat_session.id,
+        RunCreate(input="当前问题"),
+        configured_settings,
+    )
+
+    history = await list_runtime_history(db, current_run)
+
+    assert [(message.role, message.content) for message in history] == [
+        (MessageRole.USER, "成功的问题"),
+        (MessageRole.ASSISTANT, "成功的回答"),
+    ]

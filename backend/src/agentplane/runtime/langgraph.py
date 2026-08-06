@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import AbstractAsyncContextManager
 from typing import Any
 from uuid import UUID
 
-from langchain_core.messages import AIMessage, AIMessageChunk, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+)
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from pydantic import SecretStr
@@ -43,23 +47,13 @@ def _content_to_text(content: Any) -> str:
 class LangGraphRuntimeAdapter(AgentRuntimeAdapter):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self._checkpoint_context: AbstractAsyncContextManager[AsyncPostgresSaver] | None = None
-        self._checkpointer: AsyncPostgresSaver | None = None
         self._model_semaphore = asyncio.Semaphore(settings.model_max_concurrency)
 
     async def open(self) -> None:
-        if self._checkpointer is not None:
-            return
-        context = AsyncPostgresSaver.from_conn_string(self.settings.checkpoint_database_url)
-        self._checkpoint_context = context
-        self._checkpointer = await context.__aenter__()
-        await self._checkpointer.setup()
+        return None
 
     async def close(self) -> None:
-        if self._checkpoint_context is not None:
-            await self._checkpoint_context.__aexit__(None, None, None)
-        self._checkpoint_context = None
-        self._checkpointer = None
+        return None
 
     def validate_definition(self, definition: RuntimeDefinition) -> None:
         if definition.model_alias != "default":
@@ -67,8 +61,6 @@ class LangGraphRuntimeAdapter(AgentRuntimeAdapter):
         validate_tool_keys(definition.tool_keys)
 
     def _build_graph(self, definition: RuntimeDefinition) -> Any:
-        if self._checkpointer is None:
-            raise RuntimeError("LangGraphRuntimeAdapter 尚未打开")
         tools = build_langchain_tools(definition.tool_keys)
         model = ChatOpenAI(
             model=self.settings.model_name,
@@ -94,7 +86,18 @@ class LangGraphRuntimeAdapter(AgentRuntimeAdapter):
             builder.add_edge("tools", "agent")
         else:
             builder.add_edge("agent", END)
-        return builder.compile(checkpointer=self._checkpointer)
+        return builder.compile()
+
+    @staticmethod
+    def _input_messages(request: RuntimeRunRequest) -> list[BaseMessage]:
+        messages: list[BaseMessage] = []
+        for message in request.history:
+            if message.role == "user":
+                messages.append(HumanMessage(content=message.content))
+            else:
+                messages.append(AIMessage(content=message.content))
+        messages.append(HumanMessage(content=request.input_text))
+        return messages
 
     @staticmethod
     def _result_from_messages(messages: list[Any]) -> RuntimeResult:
@@ -122,21 +125,11 @@ class LangGraphRuntimeAdapter(AgentRuntimeAdapter):
         if await is_cancelled():
             raise RuntimeCancelled
         graph = self._build_graph(request.definition)
-        run_id = str(request.run_id)
-        config = {
-            "configurable": {"thread_id": str(request.runtime_thread_id)},
-            "metadata": {"agentplane_run_id": run_id},
-        }
-        prior_snapshot = await graph.aget_state(config)
-        same_run = prior_snapshot.metadata.get("agentplane_run_id") == run_id
-        if same_run and not prior_snapshot.next:
-            return self._result_from_messages(prior_snapshot.values.get("messages", []))
-        graph_input = (
-            None if same_run else {"messages": [{"role": "user", "content": request.input_text}]}
-        )
+        graph_input = {"messages": self._input_messages(request)}
+        final_messages: list[Any] | None = None
         async for event in graph.astream_events(
             graph_input,
-            config=config,
+            config={"metadata": {"agentplane_run_id": str(request.run_id)}},
             version="v2",
         ):
             if await is_cancelled():
@@ -163,9 +156,14 @@ class LangGraphRuntimeAdapter(AgentRuntimeAdapter):
                         {"tool": event.get("name"), "output": str(data.get("output"))},
                     )
                 )
+            elif event_name == "on_chain_end" and not event.get("parent_ids"):
+                output = data.get("output")
+                if isinstance(output, dict) and isinstance(output.get("messages"), list):
+                    final_messages = output["messages"]
 
-        snapshot = await graph.aget_state(config)
-        return self._result_from_messages(snapshot.values.get("messages", []))
+        if final_messages is None:
+            raise RuntimeError("LangGraph 未返回最终状态")
+        return self._result_from_messages(final_messages)
 
     async def resume_run(
         self,

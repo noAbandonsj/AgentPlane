@@ -5,6 +5,7 @@ from agentplane.runtime.base import (
     RuntimeCancelled,
     RuntimeDefinition,
     RuntimeEvent,
+    RuntimeMessage,
     RuntimeResult,
     RuntimeRunRequest,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "RuntimeCancelled",
     "RuntimeDefinition",
     "RuntimeEvent",
+    "RuntimeMessage",
     "RuntimeResult",
     "RuntimeRunRequest",
 ]

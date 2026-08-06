@@ -9,7 +9,7 @@
 
 本文档记录 AgentPlane 从产品定位、架构原则、技术选型到第一版实施边界的完整规划，作为后续开发、评审、测试和演进的共同依据。
 
-AgentPlane 的目标不是再实现一个普通聊天页面，而是先建立一个能够承载企业级智能体的平台骨架。第一版必须形成真实可运行闭环，同时避免过早引入完整微服务、多级调度、复杂权限和生产级基础设施。
+AgentPlane 的目标不是再实现一个普通聊天页面，而是先建立一个能够承载企业级智能体的平台骨架。第一版必须形成真实可运行闭环，同时避免过早引入完整微服务、多级调度、复杂权限和生产级基础设施。第一版完成后，项目继续以用户可见功能和业务闭环为优先，鲁棒性、容灾和生产加固在出现明确使用需求后再按风险补齐。
 
 第一版目标链路如下：
 
@@ -83,9 +83,10 @@ AgentPlane 定位为可逐步演进的企业级智能体控制与运行平台，
 3. **数据库保存事实，Redis 负责传递**：PostgreSQL 是任务状态和审计事件的最终事实来源，Redis 不承担长期业务真相。
 4. **共享 Agent 配置，隔离 Session 和 Run**：所有业务数据从第一天携带 `tenant_id`，每个 Run 拥有独立状态和日志。
 5. **API 和 Worker 独立扩容**：HTTP 并发与 Agent 执行并发分开治理，禁止在 FastAPI 请求进程中直接执行长任务。
-6. **已发布版本不可修改**：运行必须引用明确版本，保证审计、恢复和复现。
+6. **已发布版本不可修改**：运行必须引用明确版本，保证审计和复现。
 7. **企业写操作默认受控**：第一版不开放任意 Shell、代码执行、文件写入或外部企业系统写操作。
 8. **首版形成闭环但不追求生产部署**：实现可靠的开发态垂直切片，不引入 Kubernetes、Kafka 或完整服务网格。
+9. **后续功能优先、鲁棒性后置**：优先实现可验收的业务能力；高可用、自动恢复、复杂重试和性能加固必须由真实场景驱动，不提前占用主要开发资源。租户隔离、权限边界、数据一致性和不可逆操作保护仍是不能后置的底线。
 
 ## 4. 逻辑架构
 
@@ -93,7 +94,7 @@ AgentPlane 定位为可逐步演进的企业级智能体控制与运行平台，
 flowchart TB
     UI["Vue 3 企业控制台"]
     API["Platform API<br/>控制面 + 数据面"]
-    DB[("PostgreSQL<br/>业务事实 + RunEvent + Checkpoint")]
+    DB[("PostgreSQL<br/>业务事实 + SessionMessage + RunEvent")]
     REDIS[("Redis<br/>Streams + 实时通知")]
     WORKER["Agent Worker"]
     RUNTIME["AgentRuntimeAdapter"]
@@ -121,7 +122,7 @@ flowchart TB
 | `platform-web` | 本地 Vite 开发服务 | Agent 管理、会话聊天、Run 详情 |
 | `platform-api` | 本地 FastAPI 进程 | 身份、租户、Agent、Session、Run、SSE、Outbox |
 | `agent-worker` | 本地独立 Python 进程 | 消费任务、运行 Agent、保存事件 |
-| PostgreSQL | Docker Compose | 业务数据、事件、Outbox、LangGraph checkpoint |
+| PostgreSQL | Docker Compose | 业务数据、会话消息、事件、Outbox |
 | Redis | Docker Compose | Run 调度、Consumer Group、事件唤醒 |
 
 应用在第一版不放进容器，PostgreSQL 和 Redis 通过 Compose 启动，以保留本地热更新和调试效率。
@@ -241,7 +242,7 @@ Agent 草稿包含：
 
 创建 Session 时必须选择已经发布的 Agent，并固定当时的 `agent_version_id`。后续发布新版本不改变已有 Session。
 
-首版同一 Session 只允许一个非终态 Run，以避免同一 LangGraph thread 上的并发 checkpoint 冲突。需要并行任务时应创建不同 Session；未来再设计会话分支或 checkpoint fork。
+首版同一 Session 只允许一个非终态 Run，以保证消息顺序和交互状态简单明确。需要并行任务时应创建不同 Session；未来有明确业务需求时再设计会话分支。
 
 ### 6.3 TaskRun
 
@@ -319,7 +320,7 @@ calculator.add(a, b)
 | RunApproval | 预留人工审批 | 首版不产生正式记录 |
 | OutboxEvent | 事务任务投递 | 业务写入和待发布事件同一事务 |
 
-LangGraph checkpoint 使用独立数据库 schema 或独立表命名空间，不与平台业务表混用。平台 `Session` 和 `TaskRun` 是业务事实，LangGraph `thread_id` 和 checkpoint 是运行时实现细节。
+`SessionMessage` 是模型会话历史的唯一事实来源。Worker 在启动新 Run 时，只按顺序加载同一 Session 中已经成功完成的用户和助手消息，再附加当前输入交给 Runtime；失败、取消和当前 Run 的消息不会作为历史重复注入。首版不启用持久化 LangGraph checkpoint，也不维护独立的运行时会话事实。
 
 所有业务表：
 
@@ -394,7 +395,7 @@ Worker 采用至少一次消费语义：
 - 若任务可执行，设置 RUNNING 并运行；
 - 状态和事件持久化成功后再 ACK；
 - Worker 异常退出后通过 Pending reclaim 重新获得消息；
-- 重入时读取 LangGraph checkpoint，安全步骤不得重复产生副作用。
+- reclaim 发现同一消息对应的 Run 已是 `RUNNING` 时，将其标记为 `FAILED / WORKER_INTERRUPTED` 后 ACK，由用户显式重试；首版不自动续跑或重新执行可能产生副作用的步骤。
 
 ### 10.3 RunEvent 与实时通知
 
@@ -593,7 +594,7 @@ cost
 - TaskRun 与 Outbox 原子写入；
 - Redis Consumer Group 消费；
 - 重复消息幂等；
-- Pending reclaim；
+- Pending reclaim 后诚实标记 Worker 中断失败；
 - RunEvent sequence；
 - SSE 历史重放和断线续传；
 - Worker 完成、失败和取消路径。
@@ -684,6 +685,8 @@ Docker Engine 当前探测曾超时；如果 Docker Desktop 未运行，可以�
 
 ## 18. 后续演进路线
 
+后续演进的第一优先级是补齐用户可见功能和真实业务闭环，而不是继续预埋生产级可靠性机制。默认实施顺序为“功能实现 → 用户验收 → 根据真实故障和容量数据补鲁棒性”。除安全、租户隔离、数据一致性和不可逆操作保护外，不因假设中的未来规模提前引入自动恢复、复杂重试、额外中间件或分布式协调。
+
 ### 阶段 2：企业治理基础
 
 - OIDC、RBAC 和基础 ABAC；
@@ -718,7 +721,7 @@ Docker Engine 当前探测曾超时；如果 Docker Desktop 未运行，可以�
 | 架构形态 | 模块化单体 API + 独立 Worker | 首版简单，后续可拆分 |
 | 后端 | FastAPI / Python 3.13 | 与 Agent 生态共享语言和类型 |
 | 前端 | Vue 3 / TypeScript / Element Plus | 企业控制台开发效率高 |
-| Agent Runtime | LangGraph 1.x | 状态、checkpoint、流式和恢复能力匹配 |
+| Agent Runtime | LangGraph 1.x | Agent 工具循环和流式事件能力匹配；首版不启用持久 checkpoint |
 | 模型 | 环境变量配置 OpenAI 兼容接口 | 避免首版绑定单一模型厂商 |
 | 队列 | Redis Streams | 首版任务调度和 Consumer Group 足够 |
 | 业务事实 | PostgreSQL | 状态、审计和重放必须持久化 |

@@ -13,22 +13,23 @@ from agentplane.asyncio_compat import run_async
 from agentplane.config import Settings, get_settings
 from agentplane.db import create_engine, create_session_factory
 from agentplane.logging import bind_log_context, clear_log_context, configure_logging, get_logger
-from agentplane.models import AgentVersion, ChatSession, RunStatus, TaskRun
+from agentplane.models import AgentVersion, MessageRole, RunStatus, TaskRun
 from agentplane.queue import ensure_run_consumer_group, notify_run_event
 from agentplane.runtime import (
     AgentRuntimeAdapter,
     RuntimeCancelled,
     RuntimeDefinition,
     RuntimeEvent,
+    RuntimeMessage,
     RuntimeRunRequest,
 )
 from agentplane.runtime.langgraph import LangGraphRuntimeAdapter
 from agentplane.services import (
     append_run_event,
     get_run_for_worker,
+    list_runtime_history,
     mark_run_cancelled,
     mark_run_failed,
-    mark_run_recovered,
     mark_run_started,
     mark_run_succeeded,
 )
@@ -93,16 +94,22 @@ class AgentWorker:
                     logger.exception("pending_message_heartbeat_failed", message_id=message_id)
 
     async def _load_request(self, db: AsyncSession, run: TaskRun) -> RuntimeRunRequest:
-        chat_session = await db.scalar(select(ChatSession).where(ChatSession.id == run.session_id))
         version = await db.scalar(
             select(AgentVersion).where(AgentVersion.id == run.agent_version_id)
         )
-        if chat_session is None or version is None:
+        if version is None:
             raise RuntimeError("RUN_CONFIGURATION_MISSING")
+        stored_history = await list_runtime_history(db, run)
+        history = tuple(
+            RuntimeMessage(
+                role="user" if message.role == MessageRole.USER else "assistant",
+                content=message.content,
+            )
+            for message in stored_history
+        )
         return RuntimeRunRequest(
             run_id=run.id,
             session_id=run.session_id,
-            runtime_thread_id=chat_session.runtime_thread_id,
             trace_id=run.trace_id,
             input_text=run.input_text,
             definition=RuntimeDefinition(
@@ -112,6 +119,7 @@ class AgentWorker:
                 model_alias=version.model_alias,
                 tool_keys=version.tool_keys,
             ),
+            history=history,
         )
 
     async def process_message(self, message_id: str, fields: dict[str, Any]) -> None:
@@ -149,7 +157,20 @@ class AgentWorker:
                         message_id,
                     )
                     return
-                event = await mark_run_recovered(db, run)
+                event = await mark_run_failed(
+                    db,
+                    run,
+                    "WORKER_INTERRUPTED",
+                    "Worker 在执行期间中断，请重新提交任务",
+                )
+                await db.commit()
+                await self._notify(run_id, event.sequence)
+                await self.redis.xack(
+                    self.settings.redis_run_stream,
+                    self.settings.redis_run_group,
+                    message_id,
+                )
+                return
             elif run.status == RunStatus.QUEUED:
                 run.dispatch_message_id = message_id
                 event = await mark_run_started(db, run)

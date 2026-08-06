@@ -1321,11 +1321,6 @@
             "format": "uuid",
             "title": "Agent Version Id"
           },
-          "runtime_thread_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Runtime Thread Id"
-          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -1350,7 +1345,6 @@
           "user_id",
           "agent_definition_id",
           "agent_version_id",
-          "runtime_thread_id",
           "title",
           "status",
           "created_at",

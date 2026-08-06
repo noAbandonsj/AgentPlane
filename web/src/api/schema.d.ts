@@ -562,11 +562,6 @@ export interface components {
              * Format: uuid
              */
             agent_version_id: string;
-            /**
-             * Runtime Thread Id
-             * Format: uuid
-             */
-            runtime_thread_id: string;
             /** Title */
             title: string;
             status: components["schemas"]["SessionStatus"];

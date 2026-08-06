@@ -166,9 +166,6 @@ class ChatSession(Base, TimestampMixin):
     agent_version_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("agent_versions.id", ondelete="RESTRICT"), nullable=False
     )
-    runtime_thread_id: Mapped[UUID] = mapped_column(
-        Uuid, nullable=False, default=uuid4, unique=True
-    )
     title: Mapped[str] = mapped_column(String(300), nullable=False, default="新会话")
     status: Mapped[SessionStatus] = mapped_column(
         SAEnum(SessionStatus, native_enum=False, length=20),

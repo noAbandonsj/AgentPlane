@@ -28,9 +28,6 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+psycopg://agentplane:agentplane_dev_2026@127.0.0.1:55432/agentplane"
     )
-    checkpoint_database_url: str = (
-        "postgresql://agentplane:agentplane_dev_2026@127.0.0.1:55432/agentplane"
-    )
     redis_url: str = "redis://127.0.0.1:56379/0"
     redis_run_stream: str = "agentplane:runs"
     redis_run_group: str = "agentplane-workers"
