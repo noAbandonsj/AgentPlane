@@ -9,6 +9,12 @@ from pydantic import BaseModel, Field
 from agentplane.schemas import ToolMetadata
 
 
+class InvalidToolKeysError(ValueError):
+    def __init__(self, unknown_tool_keys: list[str]) -> None:
+        self.unknown_tool_keys = unknown_tool_keys
+        super().__init__(f"未知工具: {', '.join(unknown_tool_keys)}")
+
+
 class CalculatorAddInput(BaseModel):
     a: Decimal = Field(description="第一个加数")
     b: Decimal = Field(description="第二个加数")
@@ -37,7 +43,7 @@ def list_tool_metadata() -> list[ToolMetadata]:
 def validate_tool_keys(tool_keys: list[str]) -> None:
     unknown = sorted(set(tool_keys) - TOOL_METADATA.keys())
     if unknown:
-        raise ValueError(f"未知工具: {', '.join(unknown)}")
+        raise InvalidToolKeysError(unknown)
 
 
 def build_langchain_tools(tool_keys: list[str]) -> list[BaseTool]:

@@ -6,6 +6,8 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from agentplane.tools import InvalidToolKeysError
+
 
 class ApiError(Exception):
     def __init__(
@@ -55,8 +57,21 @@ async def handle_validation_error(_request: Request, exc: RequestValidationError
     )
 
 
+async def handle_invalid_tool_keys(_request: Request, exc: InvalidToolKeysError) -> JSONResponse:
+    return error_response(
+        400,
+        "INVALID_TOOL_KEYS",
+        "请求包含未注册的工具",
+        unknown_tool_keys=exc.unknown_tool_keys,
+    )
+
+
 def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ApiError, handle_api_error)  # pyright: ignore[reportArgumentType]
+    app.add_exception_handler(
+        InvalidToolKeysError,
+        handle_invalid_tool_keys,  # pyright: ignore[reportArgumentType]
+    )
     app.add_exception_handler(
         RequestValidationError,
         handle_validation_error,  # pyright: ignore[reportArgumentType]
