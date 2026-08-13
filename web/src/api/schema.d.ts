@@ -298,6 +298,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/invocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invocations Create */
+        post: operations["invocations_create_api_v1_invocations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invocations/{invocation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Invocations Get */
+        get: operations["invocations_get_api_v1_invocations__invocation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invocations/{invocation_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Invocation Events */
+        get: operations["invocation_events_api_v1_invocations__invocation_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -894,6 +945,84 @@ export interface components {
             checks?: {
                 [key: string]: string;
             };
+        };
+        /** InvocationCreate */
+        InvocationCreate: {
+            /** External Request Id */
+            external_request_id: string;
+            /** External User Id */
+            external_user_id: string;
+            /** Conversation Key */
+            conversation_key: string;
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Input */
+            input: string;
+        };
+        /**
+         * InvocationDecision
+         * @enum {string}
+         */
+        InvocationDecision: "ALLOWED" | "DENIED";
+        /** InvocationRead */
+        InvocationRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Application Id
+             * Format: uuid
+             */
+            application_id: string;
+            /**
+             * Credential Id
+             * Format: uuid
+             */
+            credential_id: string;
+            /** External Request Id */
+            external_request_id: string;
+            /** External User Id */
+            external_user_id: string;
+            /** User Id */
+            user_id: string | null;
+            /** Conversation Key */
+            conversation_key: string;
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Agent Version Id */
+            agent_version_id: string | null;
+            decision: components["schemas"]["InvocationDecision"];
+            /** Decision Code */
+            decision_code: string;
+            /** Decision Message */
+            decision_message: string;
+            /** Effective Tool Keys */
+            effective_tool_keys: string[];
+            /** Session Id */
+            session_id: string | null;
+            /** Run Id */
+            run_id: string | null;
+            /** Status */
+            status: string;
+            /** Output */
+            output: string | null;
+            /** Error Code */
+            error_code: string | null;
+            /** Error Message */
+            error_message: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** MessageRead */
         MessageRead: {
@@ -1819,6 +1948,101 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ApplicationPermissionsRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invocations_create_api_v1_invocations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvocationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvocationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invocations_get_api_v1_invocations__invocation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvocationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invocation_events_api_v1_invocations__invocation_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Last-Event-ID"?: string | null;
+            };
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

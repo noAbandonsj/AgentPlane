@@ -12,6 +12,7 @@ from redis.asyncio import Redis
 from agentplane.api.admin_routes import router as admin_router
 from agentplane.api.application_routes import router as application_router
 from agentplane.api.auth_routes import router as auth_router
+from agentplane.api.invocation_routes import router as invocation_router
 from agentplane.api.routes import router
 from agentplane.asyncio_compat import run_async
 from agentplane.config import Settings, get_settings
@@ -69,6 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(admin_router)
     app.include_router(application_router)
+    app.include_router(invocation_router)
     app.include_router(router)
     return app
 

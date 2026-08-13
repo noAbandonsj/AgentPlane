@@ -77,6 +77,11 @@ class ApprovalStatus(StrEnum):
     EXPIRED = "EXPIRED"
 
 
+class InvocationDecision(StrEnum):
+    ALLOWED = "ALLOWED"
+    DENIED = "DENIED"
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
@@ -433,6 +438,45 @@ class ChatSession(Base, TimestampMixin):
     )
 
 
+class ApplicationConversation(Base, TimestampMixin):
+    __tablename__ = "application_conversations"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "application_id",
+            "external_user_id",
+            "conversation_key",
+            name="uq_application_conversations_external_key",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "application_id"],
+            ["calling_applications.tenant_id", "calling_applications.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "user_id"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_definition_id"],
+            ["agent_definitions.tenant_id", "agent_definitions.id"],
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    application_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+    external_user_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    user_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    conversation_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    agent_definition_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    session_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+
+
 class SessionMessage(Base):
     __tablename__ = "session_messages"
     __table_args__ = (
@@ -511,6 +555,58 @@ class TaskRun(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
+
+class Invocation(Base):
+    __tablename__ = "invocations"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "application_id",
+            "external_request_id",
+            name="uq_invocations_application_external_request",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "application_id"],
+            ["calling_applications.tenant_id", "calling_applications.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "user_id"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    application_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+    credential_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("application_credentials.id", ondelete="RESTRICT"), nullable=False
+    )
+    external_request_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    external_user_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    user_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True, index=True)
+    conversation_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    requested_agent_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    agent_version_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("agent_versions.id", ondelete="RESTRICT"), nullable=True
+    )
+    decision: Mapped[InvocationDecision] = mapped_column(
+        SAEnum(InvocationDecision, native_enum=False, length=20), nullable=False
+    )
+    decision_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    decision_message: Mapped[str] = mapped_column(Text, nullable=False)
+    effective_tool_keys: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    session_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    run_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("task_runs.id", ondelete="SET NULL"), nullable=True, unique=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class RunEvent(Base):

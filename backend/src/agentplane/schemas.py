@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from agentplane.models import (
     AgentLifecycle,
+    InvocationDecision,
     MessageRole,
     RunStatus,
     SessionStatus,
@@ -384,6 +385,52 @@ class RunCreate(BaseModel):
         if not value:
             raise ValueError("消息不能为空")
         return value
+
+
+class InvocationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    external_request_id: str = Field(min_length=1, max_length=200)
+    external_user_id: str = Field(min_length=1, max_length=200)
+    conversation_key: str = Field(min_length=1, max_length=200)
+    agent_id: UUID
+    input: str = Field(min_length=1, max_length=100000)
+
+    @field_validator(
+        "external_request_id",
+        "external_user_id",
+        "conversation_key",
+        "input",
+    )
+    @classmethod
+    def strip_invocation_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("不能为空")
+        return stripped
+
+
+class InvocationRead(BaseModel):
+    id: UUID
+    application_id: UUID
+    credential_id: UUID
+    external_request_id: str
+    external_user_id: str
+    user_id: UUID | None
+    conversation_key: str
+    agent_id: UUID
+    agent_version_id: UUID | None
+    decision: InvocationDecision
+    decision_code: str
+    decision_message: str
+    effective_tool_keys: list[str]
+    session_id: UUID | None
+    run_id: UUID | None
+    status: str
+    output: str | None
+    error_code: str | None
+    error_message: str | None
+    created_at: datetime
 
 
 class RunRead(ApiModel):

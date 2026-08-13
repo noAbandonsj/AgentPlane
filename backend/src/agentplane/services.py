@@ -309,29 +309,7 @@ async def create_run(
     settings: Settings,
 ) -> TaskRun:
     chat_session = await get_chat_session(db, identity, session_id, for_update=True)
-    if chat_session.status != SessionStatus.ACTIVE:
-        raise ApiError(409, "SESSION_ARCHIVED", "已归档会话不能创建 Run")
-    active_run = await db.scalar(
-        select(TaskRun.id).where(
-            TaskRun.tenant_id == identity.tenant_id,
-            TaskRun.session_id == session_id,
-            TaskRun.status.in_(ACTIVE_RUN_STATUSES),
-        )
-    )
-    if active_run is not None:
-        raise ApiError(409, "ACTIVE_RUN_EXISTS", "当前会话已有运行中的 Run")
-
     await ensure_agent_access(db, identity, chat_session.agent_definition_id)
-    if not settings.model_configured:
-        raise ApiError(503, "MODEL_NOT_CONFIGURED", "模型接口尚未配置")
-    version = await db.scalar(
-        select(AgentVersion).where(
-            AgentVersion.id == chat_session.agent_version_id,
-            AgentVersion.tenant_id == identity.tenant_id,
-        )
-    )
-    if version is None:
-        raise ApiError(409, "AGENT_VERSION_MISSING", "Agent 发布版本不存在")
     granted_tool_keys = set(
         (
             await db.scalars(
@@ -342,33 +320,92 @@ async def create_run(
             )
         ).all()
     )
+    return await _create_run_for_session(
+        db,
+        chat_session,
+        identity.user_id,
+        payload.input,
+        settings,
+        granted_tool_keys,
+    )
+
+
+async def create_authorized_run(
+    db: AsyncSession,
+    identity: IdentityContext,
+    session_id: UUID,
+    payload: RunCreate,
+    settings: Settings,
+    effective_tool_keys: list[str],
+) -> TaskRun:
+    chat_session = await get_chat_session(db, identity, session_id, for_update=True)
+    return await _create_run_for_session(
+        db,
+        chat_session,
+        identity.user_id,
+        payload.input,
+        settings,
+        set(effective_tool_keys),
+    )
+
+
+async def _create_run_for_session(
+    db: AsyncSession,
+    chat_session: ChatSession,
+    user_id: UUID,
+    input_text: str,
+    settings: Settings,
+    granted_tool_keys: set[str],
+) -> TaskRun:
+    if chat_session.status != SessionStatus.ACTIVE:
+        raise ApiError(409, "SESSION_ARCHIVED", "已归档会话不能创建 Run")
+    active_run = await db.scalar(
+        select(TaskRun.id).where(
+            TaskRun.tenant_id == chat_session.tenant_id,
+            TaskRun.session_id == chat_session.id,
+            TaskRun.status.in_(ACTIVE_RUN_STATUSES),
+        )
+    )
+    if active_run is not None:
+        raise ApiError(409, "ACTIVE_RUN_EXISTS", "当前会话已有运行中的 Run")
+
+    if not settings.model_configured:
+        raise ApiError(503, "MODEL_NOT_CONFIGURED", "模型接口尚未配置")
+    version = await db.scalar(
+        select(AgentVersion).where(
+            AgentVersion.id == chat_session.agent_version_id,
+            AgentVersion.tenant_id == chat_session.tenant_id,
+        )
+    )
+    if version is None:
+        raise ApiError(409, "AGENT_VERSION_MISSING", "Agent 发布版本不存在")
     effective_tool_keys = [key for key in version.tool_keys if key in granted_tool_keys]
 
     run = TaskRun(
         id=uuid4(),
-        tenant_id=identity.tenant_id,
-        user_id=identity.user_id,
+        tenant_id=chat_session.tenant_id,
+        user_id=user_id,
         session_id=chat_session.id,
         agent_definition_id=chat_session.agent_definition_id,
         agent_version_id=chat_session.agent_version_id,
-        input_text=payload.input,
+        input_text=input_text,
         effective_tool_keys=effective_tool_keys,
         model_name=settings.model_name,
     )
     message = SessionMessage(
-        tenant_id=identity.tenant_id,
+        tenant_id=chat_session.tenant_id,
         session_id=chat_session.id,
         run_id=run.id,
         sequence=await next_message_sequence(db, chat_session.id),
         role=MessageRole.USER,
-        content=payload.input,
+        content=input_text,
     )
     outbox = OutboxEvent(
-        tenant_id=identity.tenant_id,
+        tenant_id=chat_session.tenant_id,
         aggregate_type="TaskRun",
         aggregate_id=run.id,
         event_type="run.queued",
-        payload={"run_id": str(run.id), "tenant_id": str(identity.tenant_id)},
+        payload={"run_id": str(run.id), "tenant_id": str(chat_session.tenant_id)},
     )
     db.add_all([run, message, outbox])
     chat_session.updated_at = utc_now()

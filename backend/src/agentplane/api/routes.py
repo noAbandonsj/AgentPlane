@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import asyncio
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import Sequence
 from typing import Annotated
 from uuid import UUID
 
-import orjson
 from fastapi import APIRouter, Depends, Header, Request, Response, status
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
@@ -21,11 +19,12 @@ from agentplane.api.deps import (
     get_session_factory,
     require_admin,
 )
+from agentplane.api.event_stream import run_event_stream
 from agentplane.config import Settings
 from agentplane.errors import ApiError
 from agentplane.identity import IdentityContext
 from agentplane.models import AgentDefinition, AgentVersion, ChatSession, SessionMessage, TaskRun
-from agentplane.queue import notify_run_event, run_event_channel
+from agentplane.queue import notify_run_event
 from agentplane.schemas import (
     AgentCreate,
     AgentPatch,
@@ -35,7 +34,6 @@ from agentplane.schemas import (
     HealthResponse,
     MessageRead,
     RunCreate,
-    RunEventRead,
     RunRead,
     SessionCreate,
     SessionRead,
@@ -53,7 +51,6 @@ from agentplane.services import (
     list_agent_versions,
     list_agents,
     list_messages,
-    list_run_events_after,
     list_sessions,
     list_tenant_agents,
     patch_agent,
@@ -205,51 +202,6 @@ async def runs_cancel(
     return run
 
 
-def _sse_event(event: RunEventRead) -> str:
-    data = orjson.dumps(event.model_dump(mode="json")).decode("utf-8")
-    return f"id: {event.sequence}\nevent: {event.event_type}\ndata: {data}\n\n"
-
-
-async def _run_event_stream(
-    request: Request,
-    session_factory: async_sessionmaker[AsyncSession],
-    redis: Redis,
-    identity: IdentityContext,
-    run_id: UUID,
-    start_sequence: int,
-    settings: Settings,
-) -> AsyncIterator[str]:
-    sequence = start_sequence
-    last_keepalive = asyncio.get_running_loop().time()
-    pubsub = redis.pubsub()
-    await pubsub.subscribe(run_event_channel(run_id))
-    try:
-        while not await request.is_disconnected():
-            async with session_factory() as db:
-                events = await list_run_events_after(db, identity, run_id, sequence)
-                run = await get_run(db, identity, run_id)
-            for event in events:
-                event_model = RunEventRead.model_validate(event)
-                sequence = event.sequence
-                yield _sse_event(event_model)
-            if run.status.is_terminal and not events:
-                break
-            try:
-                await pubsub.get_message(
-                    ignore_subscribe_messages=True,
-                    timeout=settings.sse_poll_seconds,
-                )
-            except TimeoutError:
-                pass
-            now = asyncio.get_running_loop().time()
-            if now - last_keepalive >= settings.sse_keepalive_seconds:
-                last_keepalive = now
-                yield ": keepalive\n\n"
-    finally:
-        await pubsub.unsubscribe(run_event_channel(run_id))
-        await pubsub.aclose()
-
-
 @router.get("/runs/{run_id}/events", response_class=StreamingResponse)
 async def runs_events(
     run_id: UUID,
@@ -267,7 +219,7 @@ async def runs_events(
     except ValueError as exc:
         raise ApiError(400, "INVALID_LAST_EVENT_ID", "Last-Event-ID 必须是整数") from exc
     return StreamingResponse(
-        _run_event_stream(
+        run_event_stream(
             request,
             session_factory,
             redis,
