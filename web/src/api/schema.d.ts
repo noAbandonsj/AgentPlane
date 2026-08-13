@@ -192,6 +192,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/invocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin Invocations List */
+        get: operations["admin_invocations_list_api_v1_admin_invocations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/invocations/{invocation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin Invocations Get */
+        get: operations["admin_invocations_get_api_v1_admin_invocations__invocation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/applications": {
         parameters: {
             query?: never;
@@ -239,6 +273,23 @@ export interface paths {
         put?: never;
         /** Application Credentials Rotate */
         post: operations["application_credentials_rotate_api_v1_admin_applications__application_id__credentials_rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/applications/{application_id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Application Credentials List */
+        get: operations["application_credentials_list_api_v1_admin_applications__application_id__credentials_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -767,6 +818,25 @@ export interface components {
             token_prefix: string;
             /** Expires At */
             expires_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ApplicationCredentialRead */
+        ApplicationCredentialRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Token Prefix */
+            token_prefix: string;
+            /** Expires At */
+            expires_at: string | null;
+            /** Revoked At */
+            revoked_at: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1638,6 +1708,77 @@ export interface operations {
             };
         };
     };
+    admin_invocations_list_api_v1_admin_invocations_get: {
+        parameters: {
+            query?: {
+                application_id?: string | null;
+                external_request_id?: string | null;
+                external_user_id?: string | null;
+                agent_id?: string | null;
+                decision?: components["schemas"]["InvocationDecision"] | null;
+                status?: ("QUEUED" | "RUNNING" | "WAITING_APPROVAL" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "REJECTED") | null;
+                created_from?: string | null;
+                created_to?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvocationRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_invocations_get_api_v1_admin_invocations__invocation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvocationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     applications_list_api_v1_admin_applications_get: {
         parameters: {
             query?: never;
@@ -1779,6 +1920,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplicationCredentialIssued"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    application_credentials_list_api_v1_admin_applications__application_id__credentials_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationCredentialRead"][];
                 };
             };
             /** @description Validation Error */

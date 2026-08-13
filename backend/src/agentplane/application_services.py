@@ -163,6 +163,23 @@ async def rotate_application_credential(
     )
 
 
+async def list_application_credentials(
+    db: AsyncSession,
+    identity: IdentityContext,
+    application_id: UUID,
+) -> Sequence[ApplicationCredential]:
+    await get_calling_application(db, identity, application_id)
+    credentials = await db.scalars(
+        select(ApplicationCredential)
+        .where(
+            ApplicationCredential.tenant_id == identity.tenant_id,
+            ApplicationCredential.application_id == application_id,
+        )
+        .order_by(ApplicationCredential.created_at.desc())
+    )
+    return credentials.all()
+
+
 async def authenticate_calling_application(
     db: AsyncSession, token: str
 ) -> ApplicationIdentityContext:

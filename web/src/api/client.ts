@@ -3,10 +3,24 @@ import type {
   AgentCreate,
   AgentPatch,
   AgentVersion,
+  ApplicationCredential,
+  ApplicationCredentialIssued,
+  ApplicationCredentialRotate,
+  ApplicationPermissions,
+  ApplicationPermissionsReplace,
   AuthLogin,
   AuthRegister,
   BootstrapStatus,
   Capability,
+  CallingApplication,
+  CallingApplicationCreate,
+  CallingApplicationCreated,
+  CallingApplicationPatch,
+  ExternalUserMapping,
+  ExternalUserMappingCreate,
+  ExternalUserMappingPatch,
+  Invocation,
+  InvocationFilters,
   Message,
   Run,
   Session,
@@ -118,6 +132,71 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ agent_ids: agentIds, tool_keys: toolKeys }),
     }),
+  listApplications: () => request<CallingApplication[]>('/admin/applications'),
+  createApplication: (payload: CallingApplicationCreate) =>
+    request<CallingApplicationCreated>('/admin/applications', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  patchApplication: (applicationId: string, payload: CallingApplicationPatch) =>
+    request<CallingApplication>(`/admin/applications/${applicationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  listApplicationCredentials: (applicationId: string) =>
+    request<ApplicationCredential[]>(`/admin/applications/${applicationId}/credentials`),
+  rotateApplicationCredential: (
+    applicationId: string,
+    payload: ApplicationCredentialRotate,
+  ) =>
+    request<ApplicationCredentialIssued>(
+      `/admin/applications/${applicationId}/credentials/rotate`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+  listExternalUserMappings: (applicationId: string) =>
+    request<ExternalUserMapping[]>(`/admin/applications/${applicationId}/user-mappings`),
+  createExternalUserMapping: (applicationId: string, payload: ExternalUserMappingCreate) =>
+    request<ExternalUserMapping>(`/admin/applications/${applicationId}/user-mappings`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  patchExternalUserMapping: (
+    applicationId: string,
+    mappingId: string,
+    payload: ExternalUserMappingPatch,
+  ) =>
+    request<ExternalUserMapping>(
+      `/admin/applications/${applicationId}/user-mappings/${mappingId}`,
+      { method: 'PATCH', body: JSON.stringify(payload) },
+    ),
+  getApplicationPermissions: (applicationId: string) =>
+    request<ApplicationPermissions>(`/admin/applications/${applicationId}/permissions`),
+  replaceApplicationPermissions: (
+    applicationId: string,
+    payload: ApplicationPermissionsReplace,
+  ) =>
+    request<ApplicationPermissions>(`/admin/applications/${applicationId}/permissions`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  listAdminInvocations: (filters: InvocationFilters = {}) => {
+    const params = new URLSearchParams()
+    if (filters.applicationId) params.set('application_id', filters.applicationId)
+    if (filters.externalRequestId)
+      params.set('external_request_id', filters.externalRequestId)
+    if (filters.externalUserId) params.set('external_user_id', filters.externalUserId)
+    if (filters.agentId) params.set('agent_id', filters.agentId)
+    if (filters.decision) params.set('decision', filters.decision)
+    if (filters.status) params.set('status', filters.status)
+    if (filters.createdFrom) params.set('created_from', filters.createdFrom)
+    if (filters.createdTo) params.set('created_to', filters.createdTo)
+    if (filters.limit !== undefined) params.set('limit', String(filters.limit))
+    if (filters.offset !== undefined) params.set('offset', String(filters.offset))
+    const query = params.toString()
+    return request<Invocation[]>(`/admin/invocations${query ? `?${query}` : ''}`)
+  },
+  getAdminInvocation: (invocationId: string) =>
+    request<Invocation>(`/admin/invocations/${invocationId}`),
 }
 
 export function errorMessage(error: unknown): string {

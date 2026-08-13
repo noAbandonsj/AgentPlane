@@ -160,6 +160,18 @@ async def test_application_secret_lifecycle_and_authentication() -> None:
         second_token = second_credential["token"]
         assert second_token != first_token
 
+        credential_list = await client.get(
+            f"/api/v1/admin/applications/{application['id']}/credentials"
+        )
+        assert credential_list.status_code == 200
+        credential_rows = credential_list.json()
+        assert len(credential_rows) == 2
+        assert all("token" not in row for row in credential_rows)
+        assert credential_rows[0]["id"] == second_credential["id"]
+        assert credential_rows[0]["revoked_at"] is None
+        assert credential_rows[1]["id"] == first_credential["id"]
+        assert credential_rows[1]["revoked_at"] is not None
+
         async with session_factory() as db:
             with pytest.raises(ApiError) as revoked:
                 await authenticate_calling_application(db, first_token)
@@ -240,10 +252,14 @@ async def test_application_admin_routes_are_tenant_scoped() -> None:
             f"/api/v1/admin/applications/{other_application_id}/credentials/rotate",
             json={},
         )
+        credentials = await client.get(
+            f"/api/v1/admin/applications/{other_application_id}/credentials"
+        )
 
         assert details.status_code == 404
         assert update.status_code == 404
         assert rotate.status_code == 404
+        assert credentials.status_code == 404
         assert details.json()["error"]["code"] == "APPLICATION_NOT_FOUND"
     finally:
         await client.aclose()

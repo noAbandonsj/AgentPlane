@@ -3,9 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentplane.config import Settings
@@ -24,12 +25,18 @@ from agentplane.models import (
     ExternalUserMapping,
     Invocation,
     InvocationDecision,
+    RunStatus,
     TaskRun,
     UserAgentGrant,
     UserStatus,
     UserToolGrant,
 )
-from agentplane.schemas import InvocationCreate, InvocationRead, RunCreate
+from agentplane.schemas import (
+    InvocationAdminStatus,
+    InvocationCreate,
+    InvocationRead,
+    RunCreate,
+)
 from agentplane.services import create_authorized_run
 
 
@@ -438,6 +445,89 @@ async def get_invocation(
     if invocation is None:
         raise ApiError(404, "INVOCATION_NOT_FOUND", "Invocation 不存在")
     run = await db.get(TaskRun, invocation.run_id) if invocation.run_id is not None else None
+    return InvocationCreationResult(invocation=invocation, run=run)
+
+
+async def list_admin_invocations(
+    db: AsyncSession,
+    identity: IdentityContext,
+    *,
+    application_id: UUID | None = None,
+    external_request_id: str | None = None,
+    external_user_id: str | None = None,
+    agent_id: UUID | None = None,
+    decision: InvocationDecision | None = None,
+    status: InvocationAdminStatus | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[InvocationCreationResult]:
+    statement = (
+        select(Invocation, TaskRun)
+        .outerjoin(
+            TaskRun,
+            and_(
+                TaskRun.tenant_id == Invocation.tenant_id,
+                TaskRun.id == Invocation.run_id,
+            ),
+        )
+        .where(Invocation.tenant_id == identity.tenant_id)
+    )
+    if application_id is not None:
+        statement = statement.where(Invocation.application_id == application_id)
+    if external_request_id:
+        statement = statement.where(
+            Invocation.external_request_id.contains(external_request_id.strip())
+        )
+    if external_user_id:
+        statement = statement.where(Invocation.external_user_id.contains(external_user_id.strip()))
+    if agent_id is not None:
+        statement = statement.where(Invocation.requested_agent_id == agent_id)
+    if decision is not None:
+        statement = statement.where(Invocation.decision == decision)
+    if status == "REJECTED":
+        statement = statement.where(Invocation.decision == InvocationDecision.DENIED)
+    elif status is not None:
+        statement = statement.where(TaskRun.status == RunStatus(status))
+    if created_from is not None:
+        statement = statement.where(Invocation.created_at >= created_from)
+    if created_to is not None:
+        statement = statement.where(Invocation.created_at <= created_to)
+    rows = (
+        await db.execute(
+            statement.order_by(Invocation.created_at.desc(), Invocation.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    return [InvocationCreationResult(invocation=invocation, run=run) for invocation, run in rows]
+
+
+async def get_admin_invocation(
+    db: AsyncSession,
+    identity: IdentityContext,
+    invocation_id: UUID,
+) -> InvocationCreationResult:
+    row = (
+        await db.execute(
+            select(Invocation, TaskRun)
+            .outerjoin(
+                TaskRun,
+                and_(
+                    TaskRun.tenant_id == Invocation.tenant_id,
+                    TaskRun.id == Invocation.run_id,
+                ),
+            )
+            .where(
+                Invocation.id == invocation_id,
+                Invocation.tenant_id == identity.tenant_id,
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        raise ApiError(404, "INVOCATION_NOT_FOUND", "Invocation 不存在")
+    invocation, run = row
     return InvocationCreationResult(invocation=invocation, run=run)
 
 

@@ -103,6 +103,10 @@ async def test_local_auth_bootstrap_registration_and_admin_approval() -> None:
             assert application_access_forbidden.status_code == 403
             assert application_access_forbidden.json()["error"]["code"] == "ADMIN_REQUIRED"
 
+            invocations_forbidden = await client.get("/api/v1/admin/invocations")
+            assert invocations_forbidden.status_code == 403
+            assert invocations_forbidden.json()["error"]["code"] == "ADMIN_REQUIRED"
+
         async with session_factory() as db:
             password_hash = await db.scalar(
                 select(LocalCredential.password_hash).where(

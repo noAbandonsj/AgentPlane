@@ -3,6 +3,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { pinia } from './pinia'
 import { useAuthStore } from './stores/auth'
 import AdminUsersView from './views/AdminUsersView.vue'
+import AdminApplicationsView from './views/AdminApplicationsView.vue'
+import AdminInvocationsView from './views/AdminInvocationsView.vue'
 import AgentsView from './views/AgentsView.vue'
 import BootstrapAdminView from './views/BootstrapAdminView.vue'
 import ChatView from './views/ChatView.vue'
@@ -22,6 +24,16 @@ const router = createRouter({
       meta: { title: '初始化管理员', public: true },
     },
     { path: '/agents', component: AgentsView, meta: { title: 'Agent 管理', admin: true } },
+    {
+      path: '/admin/applications',
+      component: AdminApplicationsView,
+      meta: { title: '调用应用', admin: true },
+    },
+    {
+      path: '/admin/invocations',
+      component: AdminInvocationsView,
+      meta: { title: '调用记录', admin: true },
+    },
     {
       path: '/admin/users',
       component: AdminUsersView,

@@ -20,15 +20,17 @@ from agentplane.application_services import (
     IssuedApplicationCredential,
     create_calling_application,
     get_calling_application,
+    list_application_credentials,
     list_calling_applications,
     patch_calling_application,
     rotate_application_credential,
 )
 from agentplane.errors import ApiError
 from agentplane.identity import IdentityContext
-from agentplane.models import CallingApplication, ExternalUserMapping
+from agentplane.models import ApplicationCredential, CallingApplication, ExternalUserMapping
 from agentplane.schemas import (
     ApplicationCredentialIssued,
+    ApplicationCredentialRead,
     ApplicationCredentialRotate,
     ApplicationPermissionsRead,
     ApplicationPermissionsReplace,
@@ -124,6 +126,18 @@ async def application_credentials_rotate(
     await db.commit()
     await db.refresh(issued.credential)
     return _issued_response(issued)
+
+
+@router.get(
+    "/{application_id}/credentials",
+    response_model=list[ApplicationCredentialRead],
+)
+async def application_credentials_list(
+    application_id: UUID,
+    db: DbDep,
+    identity: AdminIdentityDep,
+) -> Sequence[ApplicationCredential]:
+    return await list_application_credentials(db, identity, application_id)
 
 
 @router.get(

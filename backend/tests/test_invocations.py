@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
@@ -15,7 +15,17 @@ from sqlalchemy.pool import StaticPool
 from agentplane.api.app import create_app
 from agentplane.config import Settings
 from agentplane.db import Base
-from agentplane.models import AppUser, Invocation, TaskRun, Tenant, UserRole, UserStatus
+from agentplane.models import (
+    ApplicationCredential,
+    AppUser,
+    CallingApplication,
+    Invocation,
+    InvocationDecision,
+    TaskRun,
+    Tenant,
+    UserRole,
+    UserStatus,
+)
 from agentplane.services import mark_run_started, mark_run_succeeded
 
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -221,6 +231,32 @@ async def test_invocation_creation_idempotency_permissions_and_events() -> None:
             headers=headers,
         )
         assert original.json()["effective_tool_keys"] == ["calculator.add"]
+
+        admin_list = await client.get(
+            "/api/v1/admin/invocations",
+            params={
+                "application_id": access["application_id"],
+                "external_request_id": "crm-request-001",
+                "status": "SUCCEEDED",
+            },
+        )
+        assert admin_list.status_code == 200
+        assert [item["id"] for item in admin_list.json()] == [invocation["id"]]
+        assert admin_list.json()[0]["output"] == "结果为 3"
+
+        admin_detail = await client.get(f"/api/v1/admin/invocations/{invocation['id']}")
+        assert admin_detail.status_code == 200
+        assert admin_detail.json()["credential_id"] == invocation["credential_id"]
+
+        invalid_range = await client.get(
+            "/api/v1/admin/invocations",
+            params={
+                "created_from": "2026-08-13T10:00:00+08:00",
+                "created_to": "2026-08-13T09:00:00+08:00",
+            },
+        )
+        assert invalid_range.status_code == 400
+        assert invalid_range.json()["error"]["code"] == "INVALID_INVOCATION_TIME_RANGE"
     finally:
         await client.aclose()
         await engine.dispose()
@@ -253,6 +289,13 @@ async def test_invocation_denials_are_audited_and_application_scoped() -> None:
         assert audited.json()["decision"] == "DENIED"
         assert audited.json()["status"] == "REJECTED"
         assert audited.json()["run_id"] is None
+
+        admin_rejections = await client.get(
+            "/api/v1/admin/invocations",
+            params={"decision": "DENIED", "status": "REJECTED"},
+        )
+        assert admin_rejections.status_code == 200
+        assert [item["id"] for item in admin_rejections.json()] == [invocation_id]
 
         async with session_factory() as db:
             stored = await db.get(Invocation, UUID(invocation_id))
@@ -289,6 +332,72 @@ async def test_invocation_denials_are_audited_and_application_scoped() -> None:
         )
         assert unexpected_capability.status_code == 422
         assert unexpected_capability.json()["error"]["code"] == "VALIDATION_ERROR"
+    finally:
+        await client.aclose()
+        await engine.dispose()
+
+
+async def test_admin_invocations_are_tenant_scoped() -> None:
+    engine, session_factory, client = await _create_environment()
+    other_tenant_id = uuid4()
+    other_user_id = uuid4()
+    other_application_id = uuid4()
+    other_credential_id = uuid4()
+    other_invocation_id = uuid4()
+    try:
+        async with session_factory() as db:
+            db.add_all(
+                [
+                    Tenant(id=other_tenant_id, name="其他调用租户"),
+                    AppUser(
+                        id=other_user_id,
+                        tenant_id=other_tenant_id,
+                        login_name="other-admin",
+                        display_name="其他管理员",
+                        role=UserRole.ADMIN,
+                        status=UserStatus.ACTIVE,
+                    ),
+                    CallingApplication(
+                        id=other_application_id,
+                        tenant_id=other_tenant_id,
+                        code="other-app",
+                        name="其他应用",
+                        created_by=other_user_id,
+                        updated_by=other_user_id,
+                    ),
+                    ApplicationCredential(
+                        id=other_credential_id,
+                        tenant_id=other_tenant_id,
+                        application_id=other_application_id,
+                        token_hash="f" * 64,
+                        token_prefix="ap_other",
+                        created_by=other_user_id,
+                    ),
+                    Invocation(
+                        id=other_invocation_id,
+                        tenant_id=other_tenant_id,
+                        application_id=other_application_id,
+                        credential_id=other_credential_id,
+                        external_request_id="other-request",
+                        request_fingerprint="a" * 64,
+                        external_user_id="other-user",
+                        conversation_key="other-conversation",
+                        requested_agent_id=uuid4(),
+                        decision=InvocationDecision.DENIED,
+                        decision_code="OTHER_DENIAL",
+                        decision_message="其他租户拒绝记录",
+                        effective_tool_keys=[],
+                    ),
+                ]
+            )
+            await db.commit()
+
+        listed = await client.get("/api/v1/admin/invocations")
+        hidden_detail = await client.get(f"/api/v1/admin/invocations/{other_invocation_id}")
+        assert listed.status_code == 200
+        assert listed.json() == []
+        assert hidden_detail.status_code == 404
+        assert hidden_detail.json()["error"]["code"] == "INVOCATION_NOT_FOUND"
     finally:
         await client.aclose()
         await engine.dispose()

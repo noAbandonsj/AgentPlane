@@ -5,6 +5,7 @@ import { onMounted, reactive, ref } from 'vue'
 
 import { api, errorMessage } from '@/api/client'
 import type { Agent, AgentVersion, ToolMetadata } from '@/api/types'
+import CopyableId from '@/components/CopyableId.vue'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -122,14 +123,14 @@ onMounted(load)
     <div class="surface">
       <el-table v-loading="loading" :data="agents" empty-text="还没有 Agent，请先创建草稿">
         <el-table-column label="名称" min-width="180">
-          <template #default="{ row }"><strong>{{ row.name }}</strong><div class="muted">{{ row.description || '暂无说明' }}</div></template>
+          <template #default="{ row }"><strong>{{ row.name }}</strong><div class="muted">{{ row.description || '暂无说明' }}</div><CopyableId :value="row.id" /></template>
         </el-table-column>
         <el-table-column prop="model_alias" label="模型别名" width="130" />
         <el-table-column label="声明工具" min-width="180">
           <template #default="{ row }"><el-tag v-for="key in row.tool_keys" :key="key" size="small" type="info">{{ key }}</el-tag><span v-if="!row.tool_keys.length" class="muted">无</span></template>
         </el-table-column>
-        <el-table-column label="发布状态" width="150">
-          <template #default="{ row }"><el-tag :type="row.latest_published_version_id ? 'success' : 'warning'">{{ row.latest_published_version_id ? '已有发布版本' : '仅草稿' }}</el-tag></template>
+        <el-table-column label="发布状态" min-width="260">
+          <template #default="{ row }"><el-tag :type="row.latest_published_version_id ? 'success' : 'warning'">{{ row.latest_published_version_id ? '已有发布版本' : '仅草稿' }}</el-tag><div class="published-version"><CopyableId :value="row.latest_published_version_id" /></div></template>
         </el-table-column>
         <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
@@ -162,6 +163,7 @@ onMounted(load)
         <el-collapse-item v-for="version in versions" :key="version.id" :name="version.id">
           <template #title><strong>v{{ version.version_number }}</strong><span class="muted"> · {{ new Date(version.published_at).toLocaleString() }}</span></template>
           <el-descriptions :column="1" border>
+            <el-descriptions-item label="Version ID"><CopyableId :value="version.id" /></el-descriptions-item>
             <el-descriptions-item label="名称">{{ version.name }}</el-descriptions-item>
             <el-descriptions-item label="模型">{{ version.model_alias }}</el-descriptions-item>
             <el-descriptions-item label="声明工具">{{ version.tool_keys.join('、') || '无' }}</el-descriptions-item>
@@ -177,4 +179,5 @@ onMounted(load)
 .el-tag + .el-tag { margin-left: 6px; }
 .el-checkbox-group { display: grid; gap: 10px; }
 .muted { margin-top: 4px; font-size: 12px; }
+.published-version { margin-top: 6px; }
 </style>

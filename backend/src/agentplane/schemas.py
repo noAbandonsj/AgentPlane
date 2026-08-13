@@ -209,6 +209,14 @@ class ApplicationCredentialIssued(BaseModel):
     created_at: datetime
 
 
+class ApplicationCredentialRead(ApiModel):
+    id: UUID
+    token_prefix: str
+    expires_at: datetime | None
+    revoked_at: datetime | None
+    created_at: datetime
+
+
 class CallingApplicationCreated(BaseModel):
     application: CallingApplicationRead
     credential: ApplicationCredentialIssued
@@ -431,6 +439,17 @@ class InvocationRead(BaseModel):
     error_code: str | None
     error_message: str | None
     created_at: datetime
+
+
+InvocationAdminStatus = Literal[
+    "QUEUED",
+    "RUNNING",
+    "WAITING_APPROVAL",
+    "SUCCEEDED",
+    "FAILED",
+    "CANCELLED",
+    "REJECTED",
+]
 
 
 class RunRead(ApiModel):
