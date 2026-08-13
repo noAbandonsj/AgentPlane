@@ -245,6 +245,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/applications/{application_id}/user-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Application User Mappings List */
+        get: operations["application_user_mappings_list_api_v1_admin_applications__application_id__user_mappings_get"];
+        put?: never;
+        /** Application User Mappings Create */
+        post: operations["application_user_mappings_create_api_v1_admin_applications__application_id__user_mappings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/applications/{application_id}/user-mappings/{mapping_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Application User Mappings Patch */
+        patch: operations["application_user_mappings_patch_api_v1_admin_applications__application_id__user_mappings__mapping_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/applications/{application_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Application Permissions Get */
+        get: operations["application_permissions_get_api_v1_admin_applications__application_id__permissions_get"];
+        /** Application Permissions Replace */
+        put: operations["application_permissions_replace_api_v1_admin_applications__application_id__permissions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -674,6 +727,25 @@ export interface components {
             /** Expires At */
             expires_at?: string | null;
         };
+        /** ApplicationPermissionsRead */
+        ApplicationPermissionsRead: {
+            /**
+             * Application Id
+             * Format: uuid
+             */
+            application_id: string;
+            /** Agent Ids */
+            agent_ids: string[];
+            /** Tool Keys */
+            tool_keys: string[];
+        };
+        /** ApplicationPermissionsReplace */
+        ApplicationPermissionsReplace: {
+            /** Agent Ids */
+            agent_ids?: string[];
+            /** Tool Keys */
+            tool_keys?: string[];
+        };
         /** AuthLogin */
         AuthLogin: {
             /** Login Name */
@@ -761,6 +833,50 @@ export interface components {
             tools: components["schemas"]["ToolMetadata"][];
             /** Approval Resume Supported */
             approval_resume_supported: boolean;
+        };
+        /** ExternalUserMappingCreate */
+        ExternalUserMappingCreate: {
+            /** External User Id */
+            external_user_id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** ExternalUserMappingPatch */
+        ExternalUserMappingPatch: {
+            /** User Id */
+            user_id?: string | null;
+            /** Active */
+            active?: boolean | null;
+        };
+        /** ExternalUserMappingRead */
+        ExternalUserMappingRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** External User Id */
+            external_user_id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Active */
+            active: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1534,6 +1650,174 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplicationCredentialIssued"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    application_user_mappings_list_api_v1_admin_applications__application_id__user_mappings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalUserMappingRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    application_user_mappings_create_api_v1_admin_applications__application_id__user_mappings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalUserMappingCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalUserMappingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    application_user_mappings_patch_api_v1_admin_applications__application_id__user_mappings__mapping_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+                mapping_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalUserMappingPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalUserMappingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    application_permissions_get_api_v1_admin_applications__application_id__permissions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationPermissionsRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    application_permissions_replace_api_v1_admin_applications__application_id__permissions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicationPermissionsReplace"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationPermissionsRead"];
                 };
             };
             /** @description Validation Error */

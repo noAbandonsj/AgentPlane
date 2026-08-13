@@ -25,6 +25,14 @@ class ApplicationIdentityContext:
     application_code: str
 
 
+@dataclass(frozen=True, slots=True)
+class RepresentedUserContext:
+    tenant_id: UUID
+    application_id: UUID
+    user_id: UUID
+    external_user_id: str
+
+
 class DevIdentityMiddleware:
     def __init__(self, app: ASGIApp, settings: Settings) -> None:
         self.app = app

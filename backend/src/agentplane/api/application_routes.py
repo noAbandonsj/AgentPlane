@@ -9,6 +9,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentplane.api.deps import get_db, require_admin
+from agentplane.application_access_services import (
+    create_external_user_mapping,
+    get_application_permissions,
+    list_external_user_mappings,
+    patch_external_user_mapping,
+    replace_application_permissions,
+)
 from agentplane.application_services import (
     IssuedApplicationCredential,
     create_calling_application,
@@ -19,14 +26,19 @@ from agentplane.application_services import (
 )
 from agentplane.errors import ApiError
 from agentplane.identity import IdentityContext
-from agentplane.models import CallingApplication
+from agentplane.models import CallingApplication, ExternalUserMapping
 from agentplane.schemas import (
     ApplicationCredentialIssued,
     ApplicationCredentialRotate,
+    ApplicationPermissionsRead,
+    ApplicationPermissionsReplace,
     CallingApplicationCreate,
     CallingApplicationCreated,
     CallingApplicationPatch,
     CallingApplicationRead,
+    ExternalUserMappingCreate,
+    ExternalUserMappingPatch,
+    ExternalUserMappingRead,
 )
 
 router = APIRouter(prefix="/api/v1/admin/applications", tags=["applications"])
@@ -112,3 +124,95 @@ async def application_credentials_rotate(
     await db.commit()
     await db.refresh(issued.credential)
     return _issued_response(issued)
+
+
+@router.get(
+    "/{application_id}/user-mappings",
+    response_model=list[ExternalUserMappingRead],
+)
+async def application_user_mappings_list(
+    application_id: UUID,
+    db: DbDep,
+    identity: AdminIdentityDep,
+) -> Sequence[ExternalUserMapping]:
+    return await list_external_user_mappings(db, identity, application_id)
+
+
+@router.post(
+    "/{application_id}/user-mappings",
+    response_model=ExternalUserMappingRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def application_user_mappings_create(
+    application_id: UUID,
+    payload: ExternalUserMappingCreate,
+    db: DbDep,
+    identity: AdminIdentityDep,
+) -> ExternalUserMapping:
+    mapping = await create_external_user_mapping(db, identity, application_id, payload)
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise ApiError(
+            409,
+            "EXTERNAL_USER_MAPPING_EXISTS",
+            "当前应用已存在该外部用户映射",
+        ) from exc
+    await db.refresh(mapping)
+    return mapping
+
+
+@router.patch(
+    "/{application_id}/user-mappings/{mapping_id}",
+    response_model=ExternalUserMappingRead,
+)
+async def application_user_mappings_patch(
+    application_id: UUID,
+    mapping_id: UUID,
+    payload: ExternalUserMappingPatch,
+    db: DbDep,
+    identity: AdminIdentityDep,
+) -> ExternalUserMapping:
+    mapping = await patch_external_user_mapping(
+        db,
+        identity,
+        application_id,
+        mapping_id,
+        payload,
+    )
+    await db.commit()
+    await db.refresh(mapping)
+    return mapping
+
+
+@router.get(
+    "/{application_id}/permissions",
+    response_model=ApplicationPermissionsRead,
+)
+async def application_permissions_get(
+    application_id: UUID,
+    db: DbDep,
+    identity: AdminIdentityDep,
+) -> ApplicationPermissionsRead:
+    return await get_application_permissions(db, identity, application_id)
+
+
+@router.put(
+    "/{application_id}/permissions",
+    response_model=ApplicationPermissionsRead,
+)
+async def application_permissions_replace(
+    application_id: UUID,
+    payload: ApplicationPermissionsReplace,
+    db: DbDep,
+    identity: AdminIdentityDep,
+) -> ApplicationPermissionsRead:
+    permissions = await replace_application_permissions(
+        db,
+        identity,
+        application_id,
+        payload,
+    )
+    await db.commit()
+    return permissions

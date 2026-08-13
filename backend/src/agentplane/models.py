@@ -207,6 +207,98 @@ class ApplicationCredential(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class ExternalUserMapping(Base, TimestampMixin):
+    __tablename__ = "external_user_mappings"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_external_user_mappings_tenant_id_id"),
+        UniqueConstraint(
+            "tenant_id",
+            "application_id",
+            "external_user_id",
+            name="uq_external_user_mappings_application_external_user",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "application_id"],
+            ["calling_applications.tenant_id", "calling_applications.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "user_id"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "created_by"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "updated_by"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    application_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+    external_user_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    user_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    updated_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+
+
+class ApplicationAgentGrant(Base):
+    __tablename__ = "application_agent_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "application_id"],
+            ["calling_applications.tenant_id", "calling_applications.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "agent_definition_id"],
+            ["agent_definitions.tenant_id", "agent_definitions.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "granted_by"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True
+    )
+    application_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    agent_definition_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    granted_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ApplicationToolGrant(Base):
+    __tablename__ = "application_tool_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "application_id"],
+            ["calling_applications.tenant_id", "calling_applications.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "granted_by"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True
+    )
+    application_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tool_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    granted_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class AgentDefinition(Base, TimestampMixin):
     __tablename__ = "agent_definitions"
     __table_args__ = (

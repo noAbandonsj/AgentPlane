@@ -213,6 +213,61 @@ class CallingApplicationCreated(BaseModel):
     credential: ApplicationCredentialIssued
 
 
+class ExternalUserMappingCreate(BaseModel):
+    external_user_id: str = Field(min_length=1, max_length=200)
+    user_id: UUID
+
+    @field_validator("external_user_id")
+    @classmethod
+    def normalize_external_user_id(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("外部用户标识不能为空")
+        return stripped
+
+
+class ExternalUserMappingPatch(BaseModel):
+    user_id: UUID | None = None
+    active: bool | None = None
+
+    @model_validator(mode="after")
+    def reject_explicit_nulls(self) -> ExternalUserMappingPatch:
+        null_fields = [field for field in self.model_fields_set if getattr(self, field) is None]
+        if null_fields:
+            raise ValueError(f"字段不能为 null: {', '.join(sorted(null_fields))}")
+        return self
+
+
+class ExternalUserMappingRead(ApiModel):
+    id: UUID
+    external_user_id: str
+    user_id: UUID
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class ApplicationPermissionsRead(BaseModel):
+    application_id: UUID
+    agent_ids: list[UUID]
+    tool_keys: list[str]
+
+
+class ApplicationPermissionsReplace(BaseModel):
+    agent_ids: list[UUID] = Field(default_factory=list, max_length=1000)
+    tool_keys: list[str] = Field(default_factory=list, max_length=1000)
+
+    @field_validator("agent_ids")
+    @classmethod
+    def unique_agent_ids(cls, value: list[UUID]) -> list[UUID]:
+        return list(dict.fromkeys(value))
+
+    @field_validator("tool_keys")
+    @classmethod
+    def unique_tool_keys(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(value))
+
+
 class AgentCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=4000)
