@@ -10,11 +10,13 @@ import structlog
 
 SENSITIVE_KEYS = {
     "authorization",
+    "application_token",
     "cookie",
     "database_url",
     "model_api_key",
     "password",
     "redis_url",
+    "token",
 }
 
 

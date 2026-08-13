@@ -17,6 +17,14 @@ class IdentityContext:
     role: UserRole = UserRole.USER
 
 
+@dataclass(frozen=True, slots=True)
+class ApplicationIdentityContext:
+    tenant_id: UUID
+    application_id: UUID
+    credential_id: UUID
+    application_code: str
+
+
 class DevIdentityMiddleware:
     def __init__(self, app: ASGIApp, settings: Settings) -> None:
         self.app = app

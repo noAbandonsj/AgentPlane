@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from agentplane.models import (
     AgentLifecycle,
@@ -111,6 +111,106 @@ class UserPermissionsReplace(BaseModel):
     @classmethod
     def unique_permission_tool_keys(cls, value: list[str]) -> list[str]:
         return list(dict.fromkeys(value))
+
+
+class CallingApplicationCreate(BaseModel):
+    code: str = Field(min_length=2, max_length=100, pattern=r"^[a-zA-Z0-9_.-]+$")
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=4000)
+    credential_expires_at: datetime | None = None
+
+    @field_validator("code")
+    @classmethod
+    def normalize_code(cls, value: str) -> str:
+        return value.strip().casefold()
+
+    @field_validator("name")
+    @classmethod
+    def strip_application_name(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("应用名称不能为空")
+        return stripped
+
+    @field_validator("description")
+    @classmethod
+    def strip_application_description(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("credential_expires_at")
+    @classmethod
+    def validate_credential_expiration(cls, value: datetime | None) -> datetime | None:
+        if value is not None:
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError("应用凭据过期时间必须包含时区")
+            if value <= datetime.now(UTC):
+                raise ValueError("应用凭据过期时间必须晚于当前时间")
+        return value
+
+
+class CallingApplicationPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    active: bool | None = None
+
+    @model_validator(mode="after")
+    def reject_explicit_nulls(self) -> CallingApplicationPatch:
+        null_fields = [field for field in self.model_fields_set if getattr(self, field) is None]
+        if null_fields:
+            raise ValueError(f"字段不能为 null: {', '.join(sorted(null_fields))}")
+        return self
+
+    @field_validator("name")
+    @classmethod
+    def strip_optional_application_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("应用名称不能为空")
+        return stripped
+
+    @field_validator("description")
+    @classmethod
+    def strip_optional_application_description(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+
+class CallingApplicationRead(ApiModel):
+    id: UUID
+    code: str
+    name: str
+    description: str
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class ApplicationCredentialRotate(BaseModel):
+    expires_at: datetime | None = None
+
+    @field_validator("expires_at")
+    @classmethod
+    def validate_expiration(cls, value: datetime | None) -> datetime | None:
+        if value is not None:
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError("应用凭据过期时间必须包含时区")
+            if value <= datetime.now(UTC):
+                raise ValueError("应用凭据过期时间必须晚于当前时间")
+        return value
+
+
+class ApplicationCredentialIssued(BaseModel):
+    id: UUID
+    token: str
+    token_prefix: str
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class CallingApplicationCreated(BaseModel):
+    application: CallingApplicationRead
+    credential: ApplicationCredentialIssued
 
 
 class AgentCreate(BaseModel):

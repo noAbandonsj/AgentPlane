@@ -151,6 +151,62 @@ class AuthSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class CallingApplication(Base, TimestampMixin):
+    __tablename__ = "calling_applications"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_calling_applications_tenant_id_id"),
+        UniqueConstraint("tenant_id", "code", name="uq_calling_applications_tenant_code"),
+        ForeignKeyConstraint(
+            ["tenant_id", "created_by"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "updated_by"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    code: Mapped[str] = mapped_column(String(100), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    updated_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+
+
+class ApplicationCredential(Base):
+    __tablename__ = "application_credentials"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "application_id"],
+            ["calling_applications.tenant_id", "calling_applications.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "created_by"],
+            ["app_users.tenant_id", "app_users.id"],
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    application_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    token_prefix: Mapped[str] = mapped_column(String(20), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class AgentDefinition(Base, TimestampMixin):
     __tablename__ = "agent_definitions"
     __table_args__ = (

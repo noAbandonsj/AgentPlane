@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+from uuid import UUID
 
 
 def hash_password(password: str, iterations: int) -> str:
@@ -33,3 +34,25 @@ def create_session_token() -> str:
 
 def hash_session_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def create_application_token(credential_id: UUID) -> str:
+    return f"ap_{credential_id.hex}.{secrets.token_urlsafe(32)}"
+
+
+def parse_application_token(token: str) -> UUID | None:
+    try:
+        raw_credential_id, secret = token.split(".", maxsplit=1)
+        if not raw_credential_id.startswith("ap_") or not secret:
+            return None
+        return UUID(hex=raw_credential_id.removeprefix("ap_"))
+    except (ValueError, AttributeError):
+        return None
+
+
+def hash_application_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def application_token_matches(token: str, expected_hash: str) -> bool:
+    return hmac.compare_digest(hash_application_token(token), expected_hash)

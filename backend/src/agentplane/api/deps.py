@@ -3,18 +3,22 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import cast
 
-from fastapi import Request
+from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from agentplane.application_services import authenticate_calling_application
 from agentplane.config import Settings
 from agentplane.db import utc_now
 from agentplane.errors import ApiError
-from agentplane.identity import IdentityContext
+from agentplane.identity import ApplicationIdentityContext, IdentityContext
 from agentplane.logging import bind_log_context
 from agentplane.models import AppUser, AuthSession, UserRole, UserStatus
 from agentplane.security import hash_session_token
+
+application_bearer = HTTPBearer(auto_error=False)
 
 
 def get_app_settings(request: Request) -> Settings:
@@ -61,6 +65,23 @@ async def require_admin(request: Request) -> IdentityContext:
     identity = await get_identity(request)
     if identity.role != UserRole.ADMIN:
         raise ApiError(403, "ADMIN_REQUIRED", "需要管理员权限")
+    return identity
+
+
+async def get_application_identity(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(application_bearer),
+) -> ApplicationIdentityContext:
+    if credentials is None or credentials.scheme.casefold() != "bearer":
+        raise ApiError(401, "APPLICATION_AUTHENTICATION_REQUIRED", "请提供调用应用凭据")
+    session_factory = get_session_factory(request)
+    async with session_factory() as db:
+        identity = await authenticate_calling_application(db, credentials.credentials)
+    bind_log_context(
+        tenant_id=identity.tenant_id,
+        application_id=identity.application_id,
+        credential_id=identity.credential_id,
+    )
     return identity
 
 
