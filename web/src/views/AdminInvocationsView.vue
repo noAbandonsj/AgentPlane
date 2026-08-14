@@ -14,6 +14,7 @@ import type {
   User,
 } from '@/api/types'
 import CopyableId from '@/components/CopyableId.vue'
+import RunStatusTag from '@/components/RunStatusTag.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -56,21 +57,9 @@ function userLabel(userId: string | null): string {
 }
 
 function formatTime(value: string): string {
-  return new Date(value).toLocaleString()
-}
-
-function decisionTagType(decision: InvocationDecision): 'success' | 'danger' {
-  return decision === 'ALLOWED' ? 'success' : 'danger'
-}
-
-function statusTagType(
-  status: string,
-): 'success' | 'danger' | 'warning' | 'info' | 'primary' {
-  if (status === 'SUCCEEDED') return 'success'
-  if (status === 'FAILED' || status === 'REJECTED') return 'danger'
-  if (status === 'RUNNING' || status === 'WAITING_APPROVAL') return 'warning'
-  if (status === 'QUEUED') return 'primary'
-  return 'info'
+  const date = new Date(value)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 async function loadMetadata() {
@@ -157,6 +146,7 @@ onMounted(load)
   <section>
     <div class="page-toolbar">
       <div>
+        <span class="eyebrow">管理 / 调用记录</span>
         <h2>调用记录</h2>
         <p>查看外部应用调用、授权判定、权限快照和最终运行结果。</p>
       </div>
@@ -214,22 +204,25 @@ onMounted(load)
     <div class="surface invocation-table">
       <el-table v-loading="loading" :data="invocations" empty-text="没有匹配的调用记录">
         <el-table-column label="调用应用" min-width="190">
-          <template #default="{ row }">{{ applicationLabel(row.application_id) }}</template>
+          <template #default="{ row }"><span class="cell-main">{{ applicationLabel(row.application_id) }}</span></template>
         </el-table-column>
         <el-table-column label="外部请求" min-width="190">
-          <template #default="{ row }"><strong>{{ row.external_request_id }}</strong><div class="muted">{{ row.external_user_id }}</div></template>
+          <template #default="{ row }">
+            <span class="cell-main mono">{{ row.external_request_id }}</span>
+            <span class="cell-sub mono">{{ row.external_user_id }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="Agent" min-width="170">
           <template #default="{ row }">{{ agentLabel(row.agent_id) }}</template>
         </el-table-column>
-        <el-table-column label="判定" width="100">
-          <template #default="{ row }"><el-tag :type="decisionTagType(row.decision)">{{ row.decision }}</el-tag></template>
+        <el-table-column label="判定" width="110">
+          <template #default="{ row }"><RunStatusTag :status="row.decision" /></template>
         </el-table-column>
-        <el-table-column label="状态" width="150">
-          <template #default="{ row }"><el-tag :type="statusTagType(row.status)">{{ row.status }}</el-tag></template>
+        <el-table-column label="状态" width="130">
+          <template #default="{ row }"><RunStatusTag :status="row.status" /></template>
         </el-table-column>
-        <el-table-column label="调用时间" width="180">
-          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+        <el-table-column label="调用时间" width="130">
+          <template #default="{ row }"><span class="mono muted">{{ formatTime(row.created_at) }}</span></template>
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }"><el-button text type="primary" :icon="View" @click="openDetail(row)">详情</el-button></template>
@@ -258,11 +251,11 @@ onMounted(load)
           <el-descriptions-item label="Agent ID"><CopyableId :value="selectedInvocation.agent_id" /></el-descriptions-item>
           <el-descriptions-item label="Agent Version ID"><CopyableId :value="selectedInvocation.agent_version_id" /></el-descriptions-item>
           <el-descriptions-item label="授权判定">
-            <el-tag :type="decisionTagType(selectedInvocation.decision)">{{ selectedInvocation.decision }}</el-tag>
+            <RunStatusTag :status="selectedInvocation.decision" />
             <span class="decision-message">{{ selectedInvocation.decision_code }} · {{ selectedInvocation.decision_message }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="生效 Tool">{{ selectedInvocation.effective_tool_keys.join('、') || '无' }}</el-descriptions-item>
-          <el-descriptions-item label="运行状态"><el-tag :type="statusTagType(selectedInvocation.status)">{{ selectedInvocation.status }}</el-tag></el-descriptions-item>
+          <el-descriptions-item label="运行状态"><RunStatusTag :status="selectedInvocation.status" /></el-descriptions-item>
           <el-descriptions-item label="Run ID">
             <CopyableId :value="selectedInvocation.run_id" />
             <el-button v-if="selectedInvocation.run_id" text type="primary" @click="router.push(`/runs/${selectedInvocation.run_id}`)">打开 Run 详情</el-button>
@@ -278,17 +271,15 @@ onMounted(load)
 
 <style scoped>
 .filter-panel {
-  margin-bottom: 18px;
-  padding-bottom: 0;
+  margin-bottom: var(--sp-4);
+  padding: 18px 18px 0;
 }
 
 .invocation-table {
   overflow: hidden;
 }
 
-.muted {
-  margin-top: 4px;
-  color: var(--el-text-color-secondary);
+.mono {
   font-size: 12px;
 }
 
@@ -296,15 +287,20 @@ onMounted(load)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
 }
 
 .decision-message {
   margin-left: 10px;
+  color: var(--ink-600);
+  font-size: 12px;
 }
 
 pre {
   margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
   white-space: pre-wrap;
   word-break: break-word;
 }

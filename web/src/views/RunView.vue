@@ -77,6 +77,14 @@ function formatPayload(payload: Record<string, unknown>) {
   return JSON.stringify(payload, null, 2)
 }
 
+function eventTone(eventType: string): 'model' | 'tool' | 'success' | 'danger' | 'neutral' {
+  if (eventType === 'run.completed') return 'success'
+  if (eventType === 'run.failed' || eventType === 'run.cancelled') return 'danger'
+  if (eventType.startsWith('tool.')) return 'tool'
+  if (eventType.startsWith('run.')) return 'neutral'
+  return 'model'
+}
+
 onMounted(load)
 onBeforeUnmount(() => closeStream?.())
 </script>
@@ -84,7 +92,11 @@ onBeforeUnmount(() => closeStream?.())
 <template>
   <section v-loading="loading">
     <div class="page-toolbar">
-      <div><el-button text :icon="ArrowLeft" @click="router.back()">返回</el-button><h2>Run 执行详情</h2><p>数据库事件是审计事实；此页面通过 SSE 从序号 0 重放。</p></div>
+      <div>
+        <span class="eyebrow">运行 / Run 详情</span>
+        <div class="title-row"><el-button text :icon="ArrowLeft" @click="router.back()">返回</el-button><h2>Run 执行详情</h2></div>
+        <p>数据库事件是审计事实；此页面通过 SSE 从序号 0 重放。</p>
+      </div>
       <div v-if="run" class="toolbar-actions"><el-button :icon="Refresh" @click="refresh">刷新状态</el-button><el-button type="danger" plain :icon="CloseBold" :loading="cancelling" :disabled="Boolean(terminal)" @click="cancel">取消 Run</el-button></div>
     </div>
 
@@ -92,11 +104,11 @@ onBeforeUnmount(() => closeStream?.())
 
     <div v-if="run" class="run-grid">
       <div class="surface summary-card">
-        <div class="summary-title"><div><span class="muted">运行状态</span><RunStatusTag :status="run.status" /></div><span class="mono">{{ run.id }}</span></div>
+        <div class="summary-title"><div><span class="muted">运行状态</span><RunStatusTag :status="run.status" /></div><span class="id-pill">{{ run.id }}</span></div>
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="Session">{{ run.session_id }}</el-descriptions-item>
-          <el-descriptions-item label="Agent Version">{{ run.agent_version_id }}</el-descriptions-item>
-          <el-descriptions-item label="Trace ID">{{ run.trace_id }}</el-descriptions-item>
+          <el-descriptions-item label="Session"><span class="mono">{{ run.session_id }}</span></el-descriptions-item>
+          <el-descriptions-item label="Agent Version"><span class="mono">{{ run.agent_version_id }}</span></el-descriptions-item>
+          <el-descriptions-item label="Trace ID"><span class="mono">{{ run.trace_id }}</span></el-descriptions-item>
           <el-descriptions-item label="尝试次数">{{ run.attempt_count }}</el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ new Date(run.created_at).toLocaleString() }}</el-descriptions-item>
           <el-descriptions-item label="完成时间">{{ run.completed_at ? new Date(run.completed_at).toLocaleString() : '—' }}</el-descriptions-item>
@@ -111,8 +123,8 @@ onBeforeUnmount(() => closeStream?.())
 
       <div class="surface timeline-card">
         <h3>事件时间线 <span>{{ events.length }} 条</span></h3>
-        <div v-for="event in events" :key="event.sequence" class="event-line">
-          <div class="event-header"><strong>#{{ event.sequence }} · {{ event.event_type }}</strong><span class="muted">{{ new Date(event.created_at).toLocaleTimeString() }}</span></div>
+        <div v-for="event in events" :key="event.sequence" class="event-line" :data-tone="eventTone(event.event_type)">
+          <div class="event-header"><span><span class="event-seq">#{{ event.sequence }}</span> <span class="event-name">{{ event.event_type }}</span></span><span class="muted event-time">{{ new Date(event.created_at).toLocaleTimeString() }}</span></div>
           <pre class="event-payload">{{ formatPayload(event.payload) }}</pre>
         </div>
         <el-empty v-if="!events.length" description="等待 Run 事件" />
@@ -122,16 +134,27 @@ onBeforeUnmount(() => closeStream?.())
 </template>
 
 <style scoped>
-.page-toolbar > div:first-child { display: flex; align-items: center; gap: 12px; }
-.page-toolbar h2 { margin: 0; }
+.title-row { display: flex; align-items: center; gap: 4px; }
+.title-row h2 { margin: 0 0 5px; }
 .toolbar-actions { display: flex; gap: 8px; }
-.run-grid { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 18px; align-items: start; }
-.summary-card, .timeline-card { padding: 20px; }
-.summary-title { margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
+.run-grid { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: var(--sp-5); align-items: start; }
+.summary-card, .timeline-card { padding: 22px; }
+.summary-title { margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); }
 .summary-title > div { display: flex; gap: 10px; align-items: center; }
-.summary-title > span { color: #7e899a; font-size: 12px; }
-h3 { margin: 22px 0 10px; font-size: 14px; }
-h3 span { color: #8995a7; font-size: 12px; font-weight: 400; }
-.summary-card > pre { padding: 13px; border-radius: 8px; background: #f6f8fb; white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+.summary-title > .id-pill { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+h3 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 14px; font-weight: 600; }
+h3 span { color: var(--ink-400); font-size: 12px; font-weight: 400; }
+.summary-card > pre {
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #f8fafc;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+}
 .timeline-card > h3 { margin-top: 0; }
+.event-time { font-family: var(--font-mono); font-size: 11px; }
 </style>

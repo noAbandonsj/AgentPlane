@@ -55,7 +55,10 @@ function toOptionalIso(value: string): string | null {
 }
 
 function formatTime(value: string | null | undefined): string {
-  return value ? new Date(value).toLocaleString() : '永不过期'
+  if (!value) return '永不过期'
+  const date = new Date(value)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 function userLabel(userId: string): string {
@@ -269,6 +272,7 @@ onMounted(load)
   <section>
     <div class="page-toolbar">
       <div>
+        <span class="eyebrow">管理 / 调用应用</span>
         <h2>调用应用</h2>
         <p>管理 CRM、ERP 等调用方身份，以及外部用户映射和能力授权。</p>
       </div>
@@ -276,23 +280,23 @@ onMounted(load)
     </div>
 
     <div class="surface">
-      <el-table v-loading="loading" :data="applications" empty-text="还没有调用应用">
-        <el-table-column label="应用" min-width="210">
+      <el-table v-loading="loading" :data="applications" empty-text="还没有调用应用，先创建一个接入方吧">
+        <el-table-column label="应用" min-width="230">
           <template #default="{ row }">
-            <strong>{{ row.name }}</strong>
-            <div class="muted">{{ row.code }} · {{ row.description || '暂无说明' }}</div>
+            <span class="cell-main">{{ row.name }}</span>
+            <span class="cell-sub"><span class="mono">{{ row.code }}</span> · {{ row.description || '暂无说明' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="Application ID" min-width="260">
           <template #default="{ row }"><CopyableId :value="row.id" /></template>
         </el-table-column>
-        <el-table-column label="状态" width="100">
+        <el-table-column label="状态" width="110">
           <template #default="{ row }">
-            <el-tag :type="row.active ? 'success' : 'info'">{{ row.active ? '已启用' : '已停用' }}</el-tag>
+            <span class="status-tag" :data-kind="row.active ? 'ok' : 'off'">{{ row.active ? '已启用' : '已停用' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="更新时间" width="180">
-          <template #default="{ row }">{{ formatTime(row.updated_at) }}</template>
+        <el-table-column label="更新时间" width="140">
+          <template #default="{ row }"><span class="mono muted">{{ formatTime(row.updated_at) }}</span></template>
         </el-table-column>
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
@@ -415,7 +419,9 @@ onMounted(load)
               <el-button type="danger" plain :icon="Key" @click="rotateCredential">轮换凭证</el-button>
             </div>
             <el-table :data="credentials" empty-text="没有凭证记录">
-              <el-table-column prop="token_prefix" label="Token 前缀" min-width="170" />
+              <el-table-column label="Token 前缀" min-width="170">
+                <template #default="{ row }"><span class="mono">{{ row.token_prefix }}</span></template>
+              </el-table-column>
               <el-table-column label="状态" width="100">
                 <template #default="{ row }"><el-tag :type="credentialTagType(row)">{{ credentialStatus(row) }}</el-tag></template>
               </el-table-column>
@@ -439,12 +445,6 @@ onMounted(load)
 </template>
 
 <style scoped>
-.muted {
-  margin-top: 4px;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-
 .detail-form {
   max-width: 720px;
 }
@@ -454,6 +454,22 @@ onMounted(load)
   grid-template-columns: minmax(220px, 1fr) minmax(240px, 1fr) auto;
   gap: 12px;
   margin: 18px 0;
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-tag[data-kind='ok'] { color: var(--st-success); background: var(--st-success-bg); }
+.status-tag[data-kind='off'] { color: var(--st-neutral); background: var(--st-neutral-bg); }
+
+.mono {
+  font-size: 12px;
 }
 
 .permission-group {

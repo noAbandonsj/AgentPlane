@@ -116,21 +116,39 @@ onMounted(load)
 <template>
   <section>
     <div class="page-toolbar">
-      <div><h2>Agent 定义</h2><p>声明 Agent 的工具能力上限；用户实际可用工具还需与个人授权取交集。</p></div>
+      <div>
+        <span class="eyebrow">管理 / Agent 定义</span>
+        <h2>Agent 定义</h2>
+        <p>声明 Agent 的工具能力上限；用户实际可用工具还需与个人授权取交集。</p>
+      </div>
       <el-button type="primary" :icon="Plus" @click="openCreate">新建 Agent</el-button>
     </div>
 
     <div class="surface">
       <el-table v-loading="loading" :data="agents" empty-text="还没有 Agent，请先创建草稿">
-        <el-table-column label="名称" min-width="180">
-          <template #default="{ row }"><strong>{{ row.name }}</strong><div class="muted">{{ row.description || '暂无说明' }}</div><CopyableId :value="row.id" /></template>
+        <el-table-column label="名称" min-width="200">
+          <template #default="{ row }">
+            <span class="cell-main">{{ row.name }}</span>
+            <span class="cell-sub">{{ row.description || '暂无说明' }}</span>
+            <div class="row-id"><CopyableId :value="row.id" /></div>
+          </template>
         </el-table-column>
-        <el-table-column prop="model_alias" label="模型别名" width="130" />
+        <el-table-column label="模型别名" width="130">
+          <template #default="{ row }"><span class="mono muted">{{ row.model_alias }}</span></template>
+        </el-table-column>
         <el-table-column label="声明工具" min-width="180">
-          <template #default="{ row }"><el-tag v-for="key in row.tool_keys" :key="key" size="small" type="info">{{ key }}</el-tag><span v-if="!row.tool_keys.length" class="muted">无</span></template>
+          <template #default="{ row }">
+            <el-tag v-for="key in row.tool_keys" :key="key" size="small" type="info">{{ key }}</el-tag>
+            <span v-if="!row.tool_keys.length" class="muted">无</span>
+          </template>
         </el-table-column>
-        <el-table-column label="发布状态" min-width="260">
-          <template #default="{ row }"><el-tag :type="row.latest_published_version_id ? 'success' : 'warning'">{{ row.latest_published_version_id ? '已有发布版本' : '仅草稿' }}</el-tag><div class="published-version"><CopyableId :value="row.latest_published_version_id" /></div></template>
+        <el-table-column label="发布状态" min-width="240">
+          <template #default="{ row }">
+            <span class="status-tag" :data-kind="row.latest_published_version_id ? 'ok' : 'draft'">
+              {{ row.latest_published_version_id ? '已有发布版本' : '仅草稿' }}
+            </span>
+            <div class="row-id"><CopyableId :value="row.latest_published_version_id" /></div>
+          </template>
         </el-table-column>
         <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
@@ -178,6 +196,18 @@ onMounted(load)
 <style scoped>
 .el-tag + .el-tag { margin-left: 6px; }
 .el-checkbox-group { display: grid; gap: 10px; }
-.muted { margin-top: 4px; font-size: 12px; }
-.published-version { margin-top: 6px; }
+.row-id { margin-top: 6px; }
+.muted { font-size: 12px; }
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-tag[data-kind='ok'] { color: var(--st-success); background: var(--st-success-bg); }
+.status-tag[data-kind='draft'] { color: var(--st-warning); background: var(--st-warning-bg); }
 </style>

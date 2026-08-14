@@ -3,6 +3,7 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { api, errorMessage } from '@/api/client'
+import AuthShell from '@/components/AuthShell.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -32,20 +33,15 @@ async function submit() {
 </script>
 
 <template>
-  <div class="auth-page">
-    <section class="auth-card surface">
-      <div class="auth-brand">AgentPlane</div>
-      <h1>注册普通用户</h1>
-      <p class="muted">注册后需要管理员审核并配置 Agent 与工具权限。</p>
-      <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
-      <el-form label-position="top" @submit.prevent="submit">
-        <el-form-item label="登录名"><el-input v-model="form.login_name" autocomplete="username" /></el-form-item>
-        <el-form-item label="显示名称"><el-input v-model="form.display_name" /></el-form-item>
-        <el-form-item label="密码"><el-input v-model="form.password" type="password" autocomplete="new-password" show-password /></el-form-item>
-        <el-form-item label="确认密码"><el-input v-model="form.confirmPassword" type="password" autocomplete="new-password" show-password /></el-form-item>
-        <el-button type="primary" native-type="submit" :loading="loading" class="auth-submit">提交注册</el-button>
-      </el-form>
-      <div class="auth-links"><router-link to="/login">返回登录</router-link></div>
-    </section>
-  </div>
+  <AuthShell title="注册普通用户" subtitle="注册后需要管理员审核并配置 Agent 与工具权限。">
+    <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
+    <el-form label-position="top" @submit.prevent="submit">
+      <el-form-item label="登录名"><el-input v-model="form.login_name" autocomplete="username" /></el-form-item>
+      <el-form-item label="显示名称"><el-input v-model="form.display_name" /></el-form-item>
+      <el-form-item label="密码"><el-input v-model="form.password" type="password" autocomplete="new-password" show-password /></el-form-item>
+      <el-form-item label="确认密码"><el-input v-model="form.confirmPassword" type="password" autocomplete="new-password" show-password /></el-form-item>
+      <el-button type="primary" native-type="submit" :loading="loading" class="auth-submit" size="large">提交注册</el-button>
+    </el-form>
+    <div class="auth-links"><router-link to="/login">返回登录</router-link></div>
+  </AuthShell>
 </template>

@@ -355,7 +355,7 @@ test('管理员可查询调用审计并查看运行结果', async ({ page }) => 
 
   await page.goto('/admin/invocations')
   await expect(page.getByText('crm-demand-001')).toBeVisible()
-  await expect(page.getByText('SUCCEEDED')).toBeVisible()
+  await expect(page.getByText('已完成', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '详情' }).click()
   await expect(page.getByText('授权通过')).toBeVisible()
   await expect(page.getByText('{"product":"演示产品"}')).toBeVisible()

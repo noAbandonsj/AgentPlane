@@ -32,12 +32,16 @@ async function copy() {
   max-width: 100%;
   align-items: center;
   gap: 2px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 6px;
+  background: var(--st-neutral-bg);
 }
 
 code {
   min-width: 0;
   overflow: hidden;
-  color: var(--el-text-color-regular);
+  color: var(--ink-600);
+  font-family: var(--font-mono);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
