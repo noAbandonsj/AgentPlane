@@ -6,7 +6,8 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agentplane.application_services import get_calling_application
+from agentplane.applications.identity import resolve_external_user_result
+from agentplane.applications.service import get_calling_application
 from agentplane.db import utc_now
 from agentplane.errors import ApiError
 from agentplane.identity import (
@@ -19,9 +20,7 @@ from agentplane.models import (
     ApplicationAgentGrant,
     ApplicationToolGrant,
     AppUser,
-    CallingApplication,
     ExternalUserMapping,
-    UserStatus,
 )
 from agentplane.schemas import (
     ApplicationPermissionsRead,
@@ -131,42 +130,14 @@ async def resolve_external_user(
     application_identity: ApplicationIdentityContext,
     external_user_id: str,
 ) -> RepresentedUserContext:
-    normalized_external_user_id = external_user_id.strip()
-    application_active = await db.scalar(
-        select(CallingApplication.active).where(
-            CallingApplication.tenant_id == application_identity.tenant_id,
-            CallingApplication.id == application_identity.application_id,
+    resolution = await resolve_external_user_result(db, application_identity, external_user_id)
+    if resolution.represented_user is None:
+        raise ApiError(
+            403,
+            resolution.denial_code or "EXTERNAL_USER_NOT_MAPPED",
+            resolution.denial_message or "外部用户未建立有效映射",
         )
-    )
-    if application_active is not True:
-        raise ApiError(403, "APPLICATION_DISABLED", "调用应用已停用")
-    row = (
-        await db.execute(
-            select(ExternalUserMapping, AppUser)
-            .join(
-                AppUser,
-                (AppUser.tenant_id == ExternalUserMapping.tenant_id)
-                & (AppUser.id == ExternalUserMapping.user_id),
-            )
-            .where(
-                ExternalUserMapping.tenant_id == application_identity.tenant_id,
-                ExternalUserMapping.application_id == application_identity.application_id,
-                ExternalUserMapping.external_user_id == normalized_external_user_id,
-                ExternalUserMapping.active.is_(True),
-            )
-        )
-    ).one_or_none()
-    if row is None:
-        raise ApiError(403, "EXTERNAL_USER_NOT_MAPPED", "外部用户未建立有效映射")
-    mapping, user = row
-    if user.status != UserStatus.ACTIVE:
-        raise ApiError(403, "REPRESENTED_USER_DISABLED", "被代表用户未启用")
-    return RepresentedUserContext(
-        tenant_id=mapping.tenant_id,
-        application_id=mapping.application_id,
-        user_id=user.id,
-        external_user_id=mapping.external_user_id,
-    )
+    return resolution.represented_user
 
 
 async def get_application_permissions(

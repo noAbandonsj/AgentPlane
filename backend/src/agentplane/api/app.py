@@ -11,10 +11,13 @@ from redis.asyncio import Redis
 
 from agentplane.api.admin_invocation_routes import router as admin_invocation_router
 from agentplane.api.admin_routes import router as admin_router
+from agentplane.api.agent_routes import router as agent_router
 from agentplane.api.application_routes import router as application_router
 from agentplane.api.auth_routes import router as auth_router
 from agentplane.api.invocation_routes import router as invocation_router
-from agentplane.api.routes import router
+from agentplane.api.run_routes import router as run_router
+from agentplane.api.session_routes import router as session_router
+from agentplane.api.system_routes import router as system_router
 from agentplane.asyncio_compat import run_async
 from agentplane.config import Settings, get_settings
 from agentplane.db import create_engine, create_session_factory
@@ -73,7 +76,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_invocation_router)
     app.include_router(application_router)
     app.include_router(invocation_router)
-    app.include_router(router)
+    app.include_router(agent_router)
+    app.include_router(session_router)
+    app.include_router(run_router)
+    app.include_router(system_router)
     return app
 
 

@@ -3,23 +3,21 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agentplane.agents.service import create_agent, publish_agent
 from agentplane.config import Settings
 from agentplane.errors import ApiError
 from agentplane.identity import IdentityContext
 from agentplane.models import ChatSession, MessageRole, RunStatus, UserAgentGrant
-from agentplane.schemas import AgentCreate, RunCreate, SessionCreate
-from agentplane.services import (
+from agentplane.runs.service import (
     cancel_run,
-    create_agent,
-    create_chat_session,
     create_run,
     list_run_events_after,
-    list_runtime_history,
     mark_run_failed,
     mark_run_started,
     mark_run_succeeded,
-    publish_agent,
 )
+from agentplane.schemas import AgentCreate, RunCreate, SessionCreate
+from agentplane.sessions.service import create_chat_session, list_runtime_history
 
 
 async def _published_session(db: AsyncSession, identity: IdentityContext) -> ChatSession:

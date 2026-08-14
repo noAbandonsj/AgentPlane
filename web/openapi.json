@@ -1374,6 +1374,9 @@
     },
     "/api/v1/agents": {
       "get": {
+        "tags": [
+          "agents"
+        ],
         "summary": "Agents List",
         "operationId": "agents_list_api_v1_agents_get",
         "responses": {
@@ -1394,6 +1397,9 @@
         }
       },
       "post": {
+        "tags": [
+          "agents"
+        ],
         "summary": "Agents Create",
         "operationId": "agents_create_api_v1_agents_post",
         "requestBody": {
@@ -1432,6 +1438,9 @@
     },
     "/api/v1/admin/agents": {
       "get": {
+        "tags": [
+          "agents"
+        ],
         "summary": "Admin Agents List",
         "operationId": "admin_agents_list_api_v1_admin_agents_get",
         "responses": {
@@ -1454,6 +1463,9 @@
     },
     "/api/v1/agents/{agent_id}": {
       "get": {
+        "tags": [
+          "agents"
+        ],
         "summary": "Agents Get",
         "operationId": "agents_get_api_v1_agents__agent_id__get",
         "parameters": [
@@ -1492,6 +1504,9 @@
         }
       },
       "patch": {
+        "tags": [
+          "agents"
+        ],
         "summary": "Agents Patch",
         "operationId": "agents_patch_api_v1_agents__agent_id__patch",
         "parameters": [
@@ -1542,6 +1557,9 @@
     },
     "/api/v1/agents/{agent_id}/publish": {
       "post": {
+        "tags": [
+          "agents"
+        ],
         "summary": "Agents Publish",
         "operationId": "agents_publish_api_v1_agents__agent_id__publish_post",
         "parameters": [
@@ -1582,6 +1600,9 @@
     },
     "/api/v1/agents/{agent_id}/versions": {
       "get": {
+        "tags": [
+          "agents"
+        ],
         "summary": "Agents Versions",
         "operationId": "agents_versions_api_v1_agents__agent_id__versions_get",
         "parameters": [
@@ -1624,30 +1645,11 @@
         }
       }
     },
-    "/api/v1/tools": {
-      "get": {
-        "summary": "Tools List",
-        "operationId": "tools_list_api_v1_tools_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ToolMetadata"
-                  },
-                  "type": "array",
-                  "title": "Response Tools List Api V1 Tools Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/sessions": {
       "get": {
+        "tags": [
+          "sessions"
+        ],
         "summary": "Sessions List",
         "operationId": "sessions_list_api_v1_sessions_get",
         "responses": {
@@ -1668,6 +1670,9 @@
         }
       },
       "post": {
+        "tags": [
+          "sessions"
+        ],
         "summary": "Sessions Create",
         "operationId": "sessions_create_api_v1_sessions_post",
         "requestBody": {
@@ -1706,6 +1711,9 @@
     },
     "/api/v1/sessions/{session_id}": {
       "get": {
+        "tags": [
+          "sessions"
+        ],
         "summary": "Sessions Get",
         "operationId": "sessions_get_api_v1_sessions__session_id__get",
         "parameters": [
@@ -1746,6 +1754,9 @@
     },
     "/api/v1/sessions/{session_id}/messages": {
       "get": {
+        "tags": [
+          "sessions"
+        ],
         "summary": "Sessions Messages",
         "operationId": "sessions_messages_api_v1_sessions__session_id__messages_get",
         "parameters": [
@@ -1790,6 +1801,9 @@
     },
     "/api/v1/sessions/{session_id}/runs": {
       "post": {
+        "tags": [
+          "runs"
+        ],
         "summary": "Runs Create",
         "operationId": "runs_create_api_v1_sessions__session_id__runs_post",
         "parameters": [
@@ -1840,6 +1854,9 @@
     },
     "/api/v1/runs/{run_id}": {
       "get": {
+        "tags": [
+          "runs"
+        ],
         "summary": "Runs Get",
         "operationId": "runs_get_api_v1_runs__run_id__get",
         "parameters": [
@@ -1880,6 +1897,9 @@
     },
     "/api/v1/runs/{run_id}/cancel": {
       "post": {
+        "tags": [
+          "runs"
+        ],
         "summary": "Runs Cancel",
         "operationId": "runs_cancel_api_v1_runs__run_id__cancel_post",
         "parameters": [
@@ -1920,6 +1940,9 @@
     },
     "/api/v1/runs/{run_id}/events": {
       "get": {
+        "tags": [
+          "runs"
+        ],
         "summary": "Runs Events",
         "operationId": "runs_events_api_v1_runs__run_id__events_get",
         "parameters": [
@@ -1967,8 +1990,36 @@
         }
       }
     },
+    "/api/v1/tools": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Tools List",
+        "operationId": "tools_list_api_v1_tools_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ToolMetadata"
+                  },
+                  "type": "array",
+                  "title": "Response Tools List Api V1 Tools Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health/live": {
       "get": {
+        "tags": [
+          "system"
+        ],
         "summary": "Health Live",
         "operationId": "health_live_api_v1_health_live_get",
         "responses": {
@@ -1987,6 +2038,9 @@
     },
     "/api/v1/health/ready": {
       "get": {
+        "tags": [
+          "system"
+        ],
         "summary": "Health Ready",
         "operationId": "health_ready_api_v1_health_ready_get",
         "responses": {
@@ -2005,6 +2059,9 @@
     },
     "/api/v1/capabilities": {
       "get": {
+        "tags": [
+          "system"
+        ],
         "summary": "Capabilities",
         "operationId": "capabilities_api_v1_capabilities_get",
         "responses": {
@@ -2023,6 +2080,9 @@
     },
     "/api/v1/openapi-version": {
       "get": {
+        "tags": [
+          "system"
+        ],
         "summary": "Openapi Version",
         "operationId": "openapi_version_api_v1_openapi_version_get",
         "responses": {

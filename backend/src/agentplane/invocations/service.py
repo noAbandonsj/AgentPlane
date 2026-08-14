@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agentplane.applications.identity import resolve_external_user_result
 from agentplane.config import Settings
 from agentplane.errors import ApiError
 from agentplane.identity import ApplicationIdentityContext, IdentityContext
@@ -19,25 +20,21 @@ from agentplane.models import (
     ApplicationAgentGrant,
     ApplicationConversation,
     ApplicationToolGrant,
-    AppUser,
-    CallingApplication,
     ChatSession,
-    ExternalUserMapping,
     Invocation,
     InvocationDecision,
     RunStatus,
     TaskRun,
     UserAgentGrant,
-    UserStatus,
     UserToolGrant,
 )
+from agentplane.runs.service import create_authorized_run
 from agentplane.schemas import (
     InvocationAdminStatus,
     InvocationCreate,
     InvocationRead,
     RunCreate,
 )
-from agentplane.services import create_authorized_run
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +65,7 @@ def _denial_status(code: str) -> int:
         "ACTIVE_RUN_EXISTS": 409,
         "SESSION_ARCHIVED": 409,
         "MODEL_NOT_CONFIGURED": 503,
+        "APPLICATION_DISABLED": 403,
         "EXTERNAL_USER_NOT_MAPPED": 403,
         "REPRESENTED_USER_DISABLED": 403,
     }.get(code, 403)
@@ -106,6 +104,14 @@ async def _find_existing(
         )
     run = await db.get(TaskRun, invocation.run_id) if invocation.run_id is not None else None
     return InvocationCreationResult(invocation=invocation, run=run)
+
+
+async def recover_idempotent_invocation(
+    db: AsyncSession,
+    identity: ApplicationIdentityContext,
+    payload: InvocationCreate,
+) -> InvocationCreationResult | None:
+    return await _find_existing(db, identity, payload, _fingerprint(payload))
 
 
 async def _deny(
@@ -147,54 +153,26 @@ async def create_invocation(
     settings: Settings,
 ) -> InvocationCreationResult:
     request_fingerprint = _fingerprint(payload)
-    await db.execute(
-        select(CallingApplication.id)
-        .where(
-            CallingApplication.tenant_id == identity.tenant_id,
-            CallingApplication.id == identity.application_id,
-        )
-        .with_for_update()
+    user_resolution = await resolve_external_user_result(
+        db,
+        identity,
+        payload.external_user_id,
+        lock_application=True,
     )
     existing = await _find_existing(db, identity, payload, request_fingerprint)
     if existing is not None:
         return existing
-
-    mapping_row = (
-        await db.execute(
-            select(ExternalUserMapping, AppUser)
-            .join(
-                AppUser,
-                (AppUser.tenant_id == ExternalUserMapping.tenant_id)
-                & (AppUser.id == ExternalUserMapping.user_id),
-            )
-            .where(
-                ExternalUserMapping.tenant_id == identity.tenant_id,
-                ExternalUserMapping.application_id == identity.application_id,
-                ExternalUserMapping.external_user_id == payload.external_user_id,
-                ExternalUserMapping.active.is_(True),
-            )
-        )
-    ).one_or_none()
-    if mapping_row is None:
+    if user_resolution.represented_user is None:
         return await _deny(
             db,
             identity,
             payload,
             request_fingerprint,
-            "EXTERNAL_USER_NOT_MAPPED",
-            "外部用户未建立有效映射",
+            user_resolution.denial_code or "EXTERNAL_USER_NOT_MAPPED",
+            user_resolution.denial_message or "外部用户未建立有效映射",
+            user_id=user_resolution.mapped_user_id,
         )
-    _mapping, user = mapping_row
-    if user.status != UserStatus.ACTIVE:
-        return await _deny(
-            db,
-            identity,
-            payload,
-            request_fingerprint,
-            "REPRESENTED_USER_DISABLED",
-            "被代表用户未启用",
-            user_id=user.id,
-        )
+    user = user_resolution.represented_user
 
     agent = await db.scalar(
         select(AgentDefinition).where(
@@ -210,13 +188,13 @@ async def create_invocation(
             request_fingerprint,
             "AGENT_NOT_AVAILABLE",
             "Agent 不存在或不可用",
-            user_id=user.id,
+            user_id=user.user_id,
         )
 
     user_agent_granted = await db.scalar(
         select(UserAgentGrant.agent_definition_id).where(
             UserAgentGrant.tenant_id == identity.tenant_id,
-            UserAgentGrant.user_id == user.id,
+            UserAgentGrant.user_id == user.user_id,
             UserAgentGrant.agent_definition_id == agent.id,
         )
     )
@@ -228,7 +206,7 @@ async def create_invocation(
             request_fingerprint,
             "USER_AGENT_NOT_GRANTED",
             "被代表用户未获得该 Agent 的使用权限",
-            user_id=user.id,
+            user_id=user.user_id,
         )
     application_agent_granted = await db.scalar(
         select(ApplicationAgentGrant.agent_definition_id).where(
@@ -245,7 +223,7 @@ async def create_invocation(
             request_fingerprint,
             "APPLICATION_AGENT_NOT_GRANTED",
             "调用应用未获得该 Agent 的使用权限",
-            user_id=user.id,
+            user_id=user.user_id,
         )
 
     chat_session: ChatSession | None = None
@@ -258,7 +236,7 @@ async def create_invocation(
         )
     )
     if conversation is not None:
-        if conversation.user_id != user.id:
+        if conversation.user_id != user.user_id:
             return await _deny(
                 db,
                 identity,
@@ -266,7 +244,7 @@ async def create_invocation(
                 request_fingerprint,
                 "CONVERSATION_USER_CHANGED",
                 "连续会话对应的平台用户已变化，请使用新的会话标识",
-                user_id=user.id,
+                user_id=user.user_id,
             )
         if conversation.agent_definition_id != agent.id:
             return await _deny(
@@ -276,7 +254,7 @@ async def create_invocation(
                 request_fingerprint,
                 "CONVERSATION_AGENT_MISMATCH",
                 "同一连续会话不能切换 Agent",
-                user_id=user.id,
+                user_id=user.user_id,
             )
         chat_session = await db.get(ChatSession, conversation.session_id)
         if chat_session is None:
@@ -287,7 +265,7 @@ async def create_invocation(
                 request_fingerprint,
                 "SESSION_ARCHIVED",
                 "连续会话不可用",
-                user_id=user.id,
+                user_id=user.user_id,
             )
         agent_version_id = chat_session.agent_version_id
     else:
@@ -299,7 +277,7 @@ async def create_invocation(
                 request_fingerprint,
                 "AGENT_NOT_PUBLISHED",
                 "Agent 尚未发布可用版本",
-                user_id=user.id,
+                user_id=user.user_id,
             )
         agent_version_id = agent.latest_published_version_id
 
@@ -318,7 +296,7 @@ async def create_invocation(
             request_fingerprint,
             "AGENT_VERSION_MISSING",
             "Agent 发布版本不存在",
-            user_id=user.id,
+            user_id=user.user_id,
         )
     if not settings.model_configured:
         return await _deny(
@@ -328,14 +306,14 @@ async def create_invocation(
             request_fingerprint,
             "MODEL_NOT_CONFIGURED",
             "模型接口尚未配置",
-            user_id=user.id,
+            user_id=user.user_id,
             agent_version_id=version.id,
         )
 
     if conversation is None:
         chat_session = ChatSession(
             tenant_id=identity.tenant_id,
-            user_id=user.id,
+            user_id=user.user_id,
             agent_definition_id=agent.id,
             agent_version_id=agent_version_id,
             title=payload.conversation_key[:300],
@@ -346,7 +324,7 @@ async def create_invocation(
             tenant_id=identity.tenant_id,
             application_id=identity.application_id,
             external_user_id=payload.external_user_id,
-            user_id=user.id,
+            user_id=user.user_id,
             conversation_key=payload.conversation_key,
             agent_definition_id=agent.id,
             session_id=chat_session.id,
@@ -361,7 +339,7 @@ async def create_invocation(
             await db.scalars(
                 select(UserToolGrant.tool_key).where(
                     UserToolGrant.tenant_id == identity.tenant_id,
-                    UserToolGrant.user_id == user.id,
+                    UserToolGrant.user_id == user.user_id,
                 )
             )
         ).all()
@@ -382,7 +360,7 @@ async def create_invocation(
 
     represented_identity = IdentityContext(
         tenant_id=identity.tenant_id,
-        user_id=user.id,
+        user_id=user.user_id,
     )
     try:
         run = await create_authorized_run(
@@ -403,7 +381,7 @@ async def create_invocation(
             request_fingerprint,
             exc.code,
             exc.message,
-            user_id=user.id,
+            user_id=user.user_id,
             agent_version_id=version.id,
         )
 
@@ -414,7 +392,7 @@ async def create_invocation(
         external_request_id=payload.external_request_id,
         request_fingerprint=request_fingerprint,
         external_user_id=payload.external_user_id,
-        user_id=user.id,
+        user_id=user.user_id,
         conversation_key=payload.conversation_key,
         requested_agent_id=payload.agent_id,
         agent_version_id=version.id,

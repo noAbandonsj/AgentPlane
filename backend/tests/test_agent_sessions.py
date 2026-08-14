@@ -5,18 +5,18 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agentplane.errors import ApiError
-from agentplane.identity import IdentityContext
-from agentplane.models import AppUser, Tenant, UserAgentGrant, UserStatus
-from agentplane.schemas import AgentCreate, AgentPatch, SessionCreate
-from agentplane.services import (
+from agentplane.agents.service import (
     create_agent,
-    create_chat_session,
     get_agent,
     list_agent_versions,
     patch_agent,
     publish_agent,
 )
+from agentplane.errors import ApiError
+from agentplane.identity import IdentityContext
+from agentplane.models import AppUser, Tenant, UserAgentGrant, UserStatus
+from agentplane.schemas import AgentCreate, AgentPatch, SessionCreate
+from agentplane.sessions.service import create_chat_session
 
 
 async def test_published_version_is_immutable_and_session_pins_version(

@@ -596,11 +596,16 @@ AgentPlane/
 │   ├── migrations/
 │   └── src/agentplane/
 │       ├── api/
-│       ├── worker/
-│       ├── domain/
+│       ├── access/
+│       ├── agents/
+│       ├── applications/
+│       ├── invocations/
+│       ├── runs/
 │       ├── runtime/
-│       ├── infrastructure/
-│       └── shared/
+│       ├── sessions/
+│       ├── worker/
+│       ├── models.py
+│       └── schemas.py
 ├── web/
 │   ├── package.json
 │   ├── pnpm-lock.yaml
@@ -618,6 +623,11 @@ AgentPlane/
 ├── .env.example
 └── README.md
 ```
+
+后端采用模块化单体：`agents`、`sessions`、`runs`、`applications`、`invocations`
+和 `access` 按业务域组织服务；`api` 只负责 HTTP 契约和事务边界，`runtime`、`worker`
+保留执行面边界。共享数据模型和 API Schema 当前集中在 `models.py`、`schemas.py`，待单个
+文件的变更频率或规模形成真实维护压力后再按域拆分，不预先引入空的三层目录。
 
 Git 使用单仓库和简单主干开发：
 

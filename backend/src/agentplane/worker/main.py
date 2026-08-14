@@ -15,6 +15,14 @@ from agentplane.db import create_engine, create_session_factory
 from agentplane.logging import bind_log_context, clear_log_context, configure_logging, get_logger
 from agentplane.models import AgentVersion, MessageRole, RunStatus, TaskRun
 from agentplane.queue import ensure_run_consumer_group, notify_run_event
+from agentplane.runs.service import (
+    append_run_event,
+    get_run_for_worker,
+    mark_run_cancelled,
+    mark_run_failed,
+    mark_run_started,
+    mark_run_succeeded,
+)
 from agentplane.runtime import (
     AgentRuntimeAdapter,
     RuntimeCancelled,
@@ -24,15 +32,7 @@ from agentplane.runtime import (
     RuntimeRunRequest,
 )
 from agentplane.runtime.langgraph import LangGraphRuntimeAdapter
-from agentplane.services import (
-    append_run_event,
-    get_run_for_worker,
-    list_runtime_history,
-    mark_run_cancelled,
-    mark_run_failed,
-    mark_run_started,
-    mark_run_succeeded,
-)
+from agentplane.sessions.service import list_runtime_history
 from agentplane.telemetry import initialize_telemetry
 
 logger = get_logger(__name__)

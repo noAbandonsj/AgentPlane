@@ -9,6 +9,7 @@ import pytest
 from redis.asyncio import Redis
 from sqlalchemy import delete, func, select, text
 
+from agentplane.agents.service import create_agent, publish_agent
 from agentplane.api.app import create_app
 from agentplane.config import Settings
 from agentplane.db import create_engine, create_session_factory
@@ -24,17 +25,15 @@ from agentplane.models import (
     UserToolGrant,
 )
 from agentplane.queue import ensure_run_consumer_group, publish_outbox_batch
-from agentplane.runtime.fake import FakeRuntimeAdapter
-from agentplane.schemas import AgentCreate, RunCreate, SessionCreate
-from agentplane.services import (
-    create_agent,
-    create_chat_session,
+from agentplane.runs.service import (
     create_run,
     get_run_for_worker,
     list_run_events_after,
     mark_run_started,
-    publish_agent,
 )
+from agentplane.runtime.fake import FakeRuntimeAdapter
+from agentplane.schemas import AgentCreate, RunCreate, SessionCreate
+from agentplane.sessions.service import create_chat_session
 from agentplane.worker.main import AgentWorker
 
 pytestmark = [

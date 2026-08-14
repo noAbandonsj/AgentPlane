@@ -487,23 +487,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/tools": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Tools List */
-        get: operations["tools_list_api_v1_tools_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sessions": {
         parameters: {
             query?: never;
@@ -616,6 +599,23 @@ export interface paths {
         };
         /** Runs Events */
         get: operations["runs_events_api_v1_runs__run_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tools List */
+        get: operations["tools_list_api_v1_tools_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2428,26 +2428,6 @@ export interface operations {
             };
         };
     };
-    tools_list_api_v1_tools_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ToolMetadata"][];
-                };
-            };
-        };
-    };
     sessions_list_api_v1_sessions_get: {
         parameters: {
             query?: never;
@@ -2687,6 +2667,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tools_list_api_v1_tools_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolMetadata"][];
                 };
             };
         };

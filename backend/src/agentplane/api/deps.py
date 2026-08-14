@@ -9,7 +9,7 @@ from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from agentplane.application_services import authenticate_calling_application
+from agentplane.applications.service import authenticate_calling_application
 from agentplane.config import Settings
 from agentplane.db import utc_now
 from agentplane.errors import ApiError

@@ -26,7 +26,7 @@ from agentplane.models import (
     UserRole,
     UserStatus,
 )
-from agentplane.services import mark_run_started, mark_run_succeeded
+from agentplane.runs.service import mark_run_started, mark_run_succeeded
 
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 ADMIN_ID = UUID("00000000-0000-0000-0000-000000000001")

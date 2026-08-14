@@ -5,18 +5,17 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentplane.api.deps import get_db, require_admin
-from agentplane.application_access_services import (
+from agentplane.applications.access import (
     create_external_user_mapping,
     get_application_permissions,
     list_external_user_mappings,
     patch_external_user_mapping,
     replace_application_permissions,
 )
-from agentplane.application_services import (
+from agentplane.applications.service import (
     IssuedApplicationCredential,
     create_calling_application,
     get_calling_application,
@@ -25,7 +24,6 @@ from agentplane.application_services import (
     patch_calling_application,
     rotate_application_credential,
 )
-from agentplane.errors import ApiError
 from agentplane.identity import IdentityContext
 from agentplane.models import ApplicationCredential, CallingApplication, ExternalUserMapping
 from agentplane.schemas import (
@@ -71,11 +69,7 @@ async def applications_create(
     identity: AdminIdentityDep,
 ) -> CallingApplicationCreated:
     application, issued = await create_calling_application(db, identity, payload)
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise ApiError(409, "APPLICATION_CODE_EXISTS", "当前租户已存在同编码调用应用") from exc
+    await db.commit()
     await db.refresh(application)
     await db.refresh(issued.credential)
     return CallingApplicationCreated(
@@ -164,15 +158,7 @@ async def application_user_mappings_create(
     identity: AdminIdentityDep,
 ) -> ExternalUserMapping:
     mapping = await create_external_user_mapping(db, identity, application_id, payload)
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise ApiError(
-            409,
-            "EXTERNAL_USER_MAPPING_EXISTS",
-            "当前应用已存在该外部用户映射",
-        ) from exc
+    await db.commit()
     await db.refresh(mapping)
     return mapping
 

@@ -3,10 +3,9 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response, status
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agentplane.access_services import (
+from agentplane.access.service import (
     authenticate_local_user,
     bootstrap_required,
     create_bootstrap_admin,
@@ -65,13 +64,9 @@ async def auth_bootstrap_admin(
     settings: SettingsDep,
 ) -> AppUser:
     _require_local_auth(settings)
-    try:
-        user = await create_bootstrap_admin(db, settings.dev_tenant_id, payload, settings)
-        token = await create_login_session(db, user, settings)
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise ApiError(409, "LOGIN_NAME_EXISTS", "登录名已被使用") from exc
+    user = await create_bootstrap_admin(db, settings.dev_tenant_id, payload, settings)
+    token = await create_login_session(db, user, settings)
+    await db.commit()
     await db.refresh(user)
     _set_session_cookie(response, settings, token)
     return user
@@ -80,12 +75,8 @@ async def auth_bootstrap_admin(
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def auth_register(payload: AuthRegister, db: DbDep, settings: SettingsDep) -> AppUser:
     _require_local_auth(settings)
-    try:
-        user = await create_local_user(db, settings.dev_tenant_id, payload, settings)
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise ApiError(409, "LOGIN_NAME_EXISTS", "登录名已被使用") from exc
+    user = await create_local_user(db, settings.dev_tenant_id, payload, settings)
+    await db.commit()
     await db.refresh(user)
     return user
 

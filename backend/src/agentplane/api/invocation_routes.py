@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from agentplane.api.deps import (
@@ -17,13 +18,14 @@ from agentplane.api.deps import (
 )
 from agentplane.api.event_stream import run_event_stream
 from agentplane.config import Settings
-from agentplane.errors import ApiError
+from agentplane.errors import ApiError, is_integrity_constraint
 from agentplane.identity import ApplicationIdentityContext, IdentityContext
-from agentplane.invocation_services import (
+from agentplane.invocations.service import (
     create_invocation,
     get_invocation,
     invocation_denial_error,
     invocation_response,
+    recover_idempotent_invocation,
 )
 from agentplane.logging import bind_log_context
 from agentplane.models import InvocationDecision
@@ -48,14 +50,23 @@ async def invocations_create(
     identity: ApplicationIdentityDep,
     settings: SettingsDep,
 ) -> InvocationRead:
-    result = await create_invocation(db, identity, payload, settings)
+    try:
+        result = await create_invocation(db, identity, payload, settings)
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        if not is_integrity_constraint(exc, "uq_invocations_application_external_request"):
+            raise
+        recovered = await recover_idempotent_invocation(db, identity, payload)
+        if recovered is None:
+            raise
+        result = recovered
     bind_log_context(
         invocation_id=result.invocation.id,
         external_request_id=result.invocation.external_request_id,
         user_id=result.invocation.user_id,
         run_id=result.invocation.run_id,
     )
-    await db.commit()
     await db.refresh(result.invocation)
     if result.run is not None:
         await db.refresh(result.run)

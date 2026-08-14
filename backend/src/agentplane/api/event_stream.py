@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from agentplane.config import Settings
 from agentplane.identity import IdentityContext
 from agentplane.queue import run_event_channel
+from agentplane.runs.service import get_run, list_run_events_after
 from agentplane.schemas import RunEventRead
-from agentplane.services import get_run, list_run_events_after
 
 
 def sse_event(event: RunEventRead) -> str:

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agentplane.api.deps import get_db, require_admin
 from agentplane.errors import ApiError
 from agentplane.identity import IdentityContext
-from agentplane.invocation_services import (
+from agentplane.invocations.service import (
     get_admin_invocation,
     invocation_response,
     list_admin_invocations,

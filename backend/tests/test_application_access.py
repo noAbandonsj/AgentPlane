@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 from agentplane.api.app import create_app
-from agentplane.application_access_services import resolve_external_user
+from agentplane.applications.access import resolve_external_user
 from agentplane.config import Settings
 from agentplane.db import Base
 from agentplane.errors import ApiError

@@ -5,27 +5,25 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agentplane.access_services import (
+from agentplane.access.service import (
     authenticate_local_user,
     create_local_user,
     replace_user_agent_grants,
     replace_user_tool_grants,
     update_user_status,
 )
+from agentplane.agents.service import (
+    create_agent,
+    list_agents,
+    publish_agent,
+)
 from agentplane.config import Settings
 from agentplane.errors import ApiError
 from agentplane.identity import IdentityContext
 from agentplane.models import AppUser, RunStatus, Tenant, UserRole, UserStatus
+from agentplane.runs.service import create_run, mark_run_failed, mark_run_started
 from agentplane.schemas import AgentCreate, AuthRegister, RunCreate, SessionCreate
-from agentplane.services import (
-    create_agent,
-    create_chat_session,
-    create_run,
-    list_agents,
-    mark_run_failed,
-    mark_run_started,
-    publish_agent,
-)
+from agentplane.sessions.service import create_chat_session
 
 
 async def _normal_user(

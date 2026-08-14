@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agentplane.access_services import (
+from agentplane.access.service import (
     get_user_permissions,
     list_tenant_users,
     replace_user_agent_grants,
