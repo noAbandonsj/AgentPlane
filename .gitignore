@@ -33,6 +33,8 @@ redis-data/
 dump.rdb
 
 # IDE and OS
+.claude/
+.playwright-mcp/
 .idea/
 .vscode/
 .DS_Store
