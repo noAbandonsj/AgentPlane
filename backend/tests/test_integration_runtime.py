@@ -52,6 +52,7 @@ async def test_postgres_redis_worker_interruption_and_sse_replay() -> None:
     group_name = f"test-workers-{uuid4()}"
     settings = Settings(
         app_env="test",
+        auth_mode="dev",
         dev_tenant_id=tenant_id,
         dev_user_id=user_id,
         model_api_key="test-only-key",
@@ -70,7 +71,7 @@ async def test_postgres_redis_worker_interruption_and_sse_replay() -> None:
     try:
         async with session_factory() as db:
             migration = await db.scalar(text("SELECT version_num FROM alembic_version"))
-            assert migration == "20260806_0003"
+            assert migration == "20260813_0006"
             db.add(Tenant(id=tenant_id, name="集成测试租户"))
             await db.flush()
             db.add(
@@ -111,6 +112,7 @@ async def test_postgres_redis_worker_interruption_and_sse_replay() -> None:
                     ),
                 ]
             )
+            await db.flush()
             chat_session = await create_chat_session(
                 db,
                 identity,
