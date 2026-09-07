@@ -4,6 +4,8 @@ AgentPlane 是一个面向企业场景的智能体控制与运行平台骨架。
 FastAPI API、独立 Agent Worker、PostgreSQL、Redis Streams、LangGraph 和 Vue 3。
 
 完整规划见 [`docs/architecture-and-mvp-plan.md`](docs/architecture-and-mvp-plan.md)。
+后续优化项、可靠性核查结论与验收要求见
+[`docs/optimization-backlog.md`](docs/optimization-backlog.md)。
 
 ## 本地开发
 
