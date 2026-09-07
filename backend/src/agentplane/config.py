@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     worker_consumer_name: str = "worker-local-1"
     worker_block_ms: int = Field(default=5000, ge=100, le=60000)
     worker_reclaim_idle_ms: int = Field(default=60000, ge=1000)
+    worker_retry_initial_seconds: float = Field(default=1, gt=0, le=30)
+    worker_retry_max_seconds: float = Field(default=30, gt=0, le=300)
+    worker_shutdown_grace_seconds: float = Field(default=30, ge=0, le=600)
+    worker_cleanup_timeout_seconds: float = Field(default=10, gt=0, le=60)
+    worker_run_timeout_seconds: float = Field(default=300, gt=0, le=86400)
+    worker_redis_timeout_seconds: float = Field(default=10, gt=0, le=120)
     outbox_poll_seconds: float = Field(default=0.5, ge=0.05, le=30)
     sse_poll_seconds: float = Field(default=1, ge=0.1, le=30)
     sse_keepalive_seconds: float = Field(default=15, ge=1, le=120)
