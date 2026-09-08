@@ -16,7 +16,7 @@ from agentplane.models import (
     UserAgentGrant,
 )
 from agentplane.schemas import AgentCreate, AgentPatch
-from agentplane.tools import validate_tool_keys
+from agentplane.tools import snapshot_tool_bindings, validate_tool_keys
 
 
 def _agent_not_found() -> ApiError:
@@ -163,6 +163,7 @@ async def publish_agent(
         instructions=agent.draft_instructions,
         model_alias=agent.draft_model_alias,
         tool_keys=list(agent.draft_tool_keys),
+        tool_bindings=snapshot_tool_bindings(agent.draft_tool_keys),
         published_by=identity.user_id,
     )
     db.add(version)

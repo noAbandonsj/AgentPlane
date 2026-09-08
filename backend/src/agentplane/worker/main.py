@@ -19,7 +19,7 @@ from agentplane.asyncio_compat import run_async
 from agentplane.config import Settings, get_settings
 from agentplane.db import create_engine, create_session_factory
 from agentplane.logging import bind_log_context, clear_log_context, configure_logging, get_logger
-from agentplane.models import AgentVersion, MessageRole, RunStatus, TaskRun
+from agentplane.models import AgentVersion, Invocation, MessageRole, RunStatus, TaskRun
 from agentplane.queue import ensure_run_consumer_group, notify_run_event
 from agentplane.runs.service import (
     append_run_event,
@@ -41,6 +41,8 @@ from agentplane.runtime import (
 from agentplane.runtime.langgraph import LangGraphRuntimeAdapter
 from agentplane.sessions.service import list_runtime_history
 from agentplane.telemetry import initialize_telemetry
+from agentplane.tool_contracts import ToolExecutionContext, ToolExecutionError
+from agentplane.tool_execution import ToolExecutor, interrupt_tool_calls
 
 logger = get_logger(__name__)
 
@@ -130,6 +132,34 @@ class AgentWorker:
             raise RuntimeError("RUN_CONFIGURATION_MISSING")
         snapshot_tool_keys = set(run.effective_tool_keys)
         effective_tool_keys = [key for key in version.tool_keys if key in snapshot_tool_keys]
+        if any(
+            run.tool_bindings.get(key) != version.tool_bindings.get(key)
+            or key not in run.tool_bindings
+            for key in effective_tool_keys
+        ):
+            raise ToolExecutionError("TOOL_VERSION_UNAVAILABLE")
+        invocation = await db.scalar(
+            select(Invocation).where(
+                Invocation.tenant_id == run.tenant_id, Invocation.run_id == run.id
+            )
+        )
+        context = ToolExecutionContext(
+            tenant_id=run.tenant_id,
+            user_id=run.user_id,
+            run_id=run.id,
+            session_id=run.session_id,
+            trace_id=run.trace_id,
+            dispatch_message_id=run.dispatch_message_id or "",
+            application_id=invocation.application_id if invocation else None,
+            external_user_id=invocation.external_user_id if invocation else None,
+        )
+        executor = ToolExecutor(
+            self.session_factory,
+            context,
+            lambda event: self._emit_runtime_event(
+                context.run_id, context.dispatch_message_id, event
+            ),
+        )
         stored_history = await list_runtime_history(db, run)
         history = tuple(
             RuntimeMessage(
@@ -149,8 +179,11 @@ class AgentWorker:
                 instructions=version.instructions,
                 model_alias=version.model_alias,
                 tool_keys=effective_tool_keys,
+                tool_bindings={key: run.tool_bindings[key] for key in effective_tool_keys},
             ),
             history=history,
+            tool_context=context,
+            execute_tool=executor.execute,
         )
 
     async def _finish(
@@ -189,6 +222,7 @@ class AgentWorker:
             else:
                 event = await mark_run_failed(db, run, code, message)
             sequence = event.sequence
+            await interrupt_tool_calls(db, run)
             await db.commit()
         await self._notify(run_id, sequence)
         return True
@@ -291,7 +325,11 @@ class AgentWorker:
                     "RUN_CONFIGURATION_MISSING": "任务配置不存在",
                     "MODEL_NOT_CONFIGURED": "模型接口尚未配置",
                 }
-                code = str(exc) if str(exc) in errors else "RUN_EXECUTION_FAILED"
+                code = (
+                    exc.code
+                    if isinstance(exc, ToolExecutionError)
+                    else (str(exc) if str(exc) in errors else "RUN_EXECUTION_FAILED")
+                )
                 should_ack = await self._finish(
                     run_id,
                     message_id,

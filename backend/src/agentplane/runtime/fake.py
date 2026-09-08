@@ -40,10 +40,20 @@ class FakeRuntimeAdapter(AgentRuntimeAdapter):
             request.input_text.startswith("add:")
             and "calculator.add" in request.definition.tool_keys
         ):
-            await emit(RuntimeEvent("tool.started", {"tool": "calculator_add"}))
             values = request.input_text.removeprefix("add:").split(",", maxsplit=1)
-            result = str(int(values[0].strip()) + int(values[1].strip()))
-            await emit(RuntimeEvent("tool.completed", {"tool": "calculator_add", "output": result}))
+            if request.execute_tool is not None:
+                result = await request.execute_tool(
+                    "calculator.add",
+                    request.definition.tool_bindings["calculator.add"],
+                    {"a": values[0].strip(), "b": values[1].strip()},
+                )
+            else:
+                # Standalone adapter tests have no database or production executor.
+                await emit(RuntimeEvent("tool.started", {"tool": "calculator_add"}))
+                result = str(int(values[0].strip()) + int(values[1].strip()))
+                await emit(
+                    RuntimeEvent("tool.completed", {"tool": "calculator_add", "output": result})
+                )
             output = f"计算结果是 {result}"
         else:
             output = f"测试回复：{request.input_text}"

@@ -11,7 +11,7 @@ from agentplane.api.deps import get_app_settings, get_db, get_identity, get_redi
 from agentplane.config import Settings
 from agentplane.identity import IdentityContext
 from agentplane.schemas import CapabilityResponse, HealthResponse, ToolMetadata
-from agentplane.tools import list_tool_metadata
+from agentplane.tool_management import list_tenant_tools
 
 router = APIRouter(prefix="/api/v1", tags=["system"])
 
@@ -22,8 +22,8 @@ RedisDep = Annotated[Redis, Depends(get_redis)]
 
 
 @router.get("/tools", response_model=list[ToolMetadata])
-async def tools_list(_identity: IdentityDep) -> list[ToolMetadata]:
-    return list_tool_metadata()
+async def tools_list(db: DbDep, identity: IdentityDep) -> list[ToolMetadata]:
+    return await list_tenant_tools(db, identity.tenant_id)
 
 
 @router.get("/health/live", response_model=HealthResponse)
@@ -49,12 +49,14 @@ async def health_ready(db: DbDep, redis: RedisDep) -> HealthResponse:
 
 
 @router.get("/capabilities", response_model=CapabilityResponse)
-async def capabilities(settings: SettingsDep, _identity: IdentityDep) -> CapabilityResponse:
+async def capabilities(
+    settings: SettingsDep, db: DbDep, identity: IdentityDep
+) -> CapabilityResponse:
     return CapabilityResponse(
         runtime="langgraph",
         model_configured=settings.model_configured,
         model_aliases=["default"] if settings.model_configured else [],
-        tools=list_tool_metadata(),
+        tools=await list_tenant_tools(db, identity.tenant_id),
         approval_resume_supported=False,
     )
 

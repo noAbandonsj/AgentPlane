@@ -692,6 +692,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tools List */
+        get: operations["tools_list_api_v1_admin_tools_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tools/{tool_key}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Versions List */
+        get: operations["versions_list_api_v1_admin_tools__tool_key__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tools/{tool_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Tool Patch */
+        patch: operations["tool_patch_api_v1_admin_tools__tool_key__patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/tool-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Calls List */
+        get: operations["calls_list_api_v1_admin_tool_calls_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -794,6 +862,10 @@ export interface components {
             model_alias: string;
             /** Tool Keys */
             tool_keys: string[];
+            /** Tool Bindings */
+            tool_bindings: {
+                [key: string]: string;
+            };
             /**
              * Published At
              * Format: date-time
@@ -1170,6 +1242,10 @@ export interface components {
             input_text: string;
             /** Effective Tool Keys */
             effective_tool_keys: string[];
+            /** Tool Bindings */
+            tool_bindings: {
+                [key: string]: string;
+            };
             /** Output Text */
             output_text: string | null;
             /** Error Code */
@@ -1260,6 +1336,64 @@ export interface components {
          * @enum {string}
          */
         SessionStatus: "ACTIVE" | "ARCHIVED";
+        /** ToolCallRead */
+        ToolCallRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Application Id */
+            application_id: string | null;
+            /**
+             * Trace Id
+             * Format: uuid
+             */
+            trace_id: string;
+            /** Tool Key */
+            tool_key: string;
+            /** Tool Version */
+            tool_version: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "STARTED" | "SUCCEEDED" | "DENIED" | "FAILED" | "TIMED_OUT" | "CANCELLED" | "INTERRUPTED";
+            /** Error Code */
+            error_code: string | null;
+            /** Input Summary */
+            input_summary: {
+                [key: string]: unknown;
+            };
+            /** Output Summary */
+            output_summary: {
+                [key: string]: unknown;
+            };
+            /** Duration Ms */
+            duration_ms: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Completed At */
+            completed_at: string | null;
+        };
+        /**
+         * ToolCallStatus
+         * @enum {string}
+         */
+        ToolCallStatus: "STARTED" | "SUCCEEDED" | "DENIED" | "FAILED" | "TIMED_OUT" | "CANCELLED" | "INTERRUPTED";
         /** ToolGrantReplace */
         ToolGrantReplace: {
             /** Tool Keys */
@@ -1280,6 +1414,39 @@ export interface components {
             risk_level: "LOW" | "MEDIUM" | "HIGH";
             /** Requires Approval */
             requires_approval: boolean;
+            /**
+             * Version
+             * @default 1.0.0
+             */
+            version: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Read Only
+             * @default true
+             */
+            read_only: boolean;
+            /**
+             * Timeout Seconds
+             * @default 10
+             */
+            timeout_seconds: number;
+            /** Input Schema */
+            input_schema?: {
+                [key: string]: unknown;
+            };
+            /** Output Schema */
+            output_schema?: {
+                [key: string]: unknown;
+            };
+        };
+        /** ToolPolicyPatch */
+        ToolPolicyPatch: {
+            /** Enabled */
+            enabled: boolean;
         };
         /** UserPermissionsRead */
         UserPermissionsRead: {
@@ -2769,6 +2936,129 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    tools_list_api_v1_admin_tools_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolMetadata"][];
+                };
+            };
+        };
+    };
+    versions_list_api_v1_admin_tools__tool_key__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolMetadata"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tool_patch_api_v1_admin_tools__tool_key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolPolicyPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolMetadata"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    calls_list_api_v1_admin_tool_calls_get: {
+        parameters: {
+            query?: {
+                tool_key?: string | null;
+                run_id?: string | null;
+                user_id?: string | null;
+                application_id?: string | null;
+                status?: components["schemas"]["ToolCallStatus"] | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolCallRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

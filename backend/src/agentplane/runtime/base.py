@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 from uuid import UUID
 
+from agentplane.tool_contracts import ToolExecutionContext, ToolInvoker
+
 
 @dataclass(frozen=True, slots=True)
 class RuntimeDefinition:
@@ -14,6 +16,7 @@ class RuntimeDefinition:
     instructions: str
     model_alias: str
     tool_keys: list[str]
+    tool_bindings: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +33,8 @@ class RuntimeRunRequest:
     input_text: str
     definition: RuntimeDefinition
     history: tuple[RuntimeMessage, ...] = ()
+    tool_context: ToolExecutionContext | None = None
+    execute_tool: ToolInvoker | None = None
 
 
 @dataclass(frozen=True, slots=True)

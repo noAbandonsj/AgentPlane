@@ -71,7 +71,7 @@ async def test_postgres_redis_worker_interruption_and_sse_replay() -> None:
     try:
         async with session_factory() as db:
             migration = await db.scalar(text("SELECT version_num FROM alembic_version"))
-            assert migration == "20260813_0006"
+            assert migration == "20260908_0007"
             db.add(Tenant(id=tenant_id, name="集成测试租户"))
             await db.flush()
             db.add(

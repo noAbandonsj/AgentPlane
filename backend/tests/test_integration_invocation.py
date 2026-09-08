@@ -174,6 +174,27 @@ async def test_postgres_redis_application_invocation_contract() -> None:
             assert completed.status_code == 200
             assert completed.json()["status"] == "SUCCEEDED"
             assert completed.json()["output"] == "计算结果是 42"
+            tool_calls = await client.get(
+                "/api/v1/admin/tool-calls", params={"run_id": invocation["run_id"]}
+            )
+            assert tool_calls.status_code == 200
+            (tool_call,) = tool_calls.json()
+            assert tool_call["status"] == "SUCCEEDED"
+            assert tool_call["tool_version"] == "1.0.0"
+            assert tool_call["application_id"] == application_id
+            assert tool_call["user_id"] == str(represented_user_id)
+            assert tool_call["input_summary"] == {"field_count": 2, "values": "REDACTED"}
+            await worker.process_message(message_id, fields)
+            assert (
+                len(
+                    (
+                        await client.get(
+                            "/api/v1/admin/tool-calls", params={"run_id": invocation["run_id"]}
+                        )
+                    ).json()
+                )
+                == 1
+            )
 
             events = await client.get(
                 f"/api/v1/invocations/{invocation['id']}/events",
@@ -188,13 +209,34 @@ async def test_postgres_redis_application_invocation_contract() -> None:
                 json={
                     **payload,
                     "external_request_id": f"crm-request-{uuid4()}",
-                    "input": "继续当前客户会话",
+                    "input": "add: 1, 2",
                 },
                 headers=headers,
             )
             assert continued.status_code == 202
             assert continued.json()["session_id"] == invocation["session_id"]
             assert continued.json()["effective_tool_keys"] == ["calculator.add"]
+            disabled = await client.patch(
+                "/api/v1/admin/tools/calculator.add", json={"enabled": False}
+            )
+            assert disabled.status_code == 200
+            assert await publish_outbox_batch(session_factory, redis, settings) == 1
+            pending = await redis.xreadgroup(
+                group_name, worker.consumer_name, {stream_name: ">"}, count=1
+            )
+            await worker.process_message(*pending[0][1][0])
+            failed = await client.get(
+                f"/api/v1/invocations/{continued.json()['id']}", headers=headers
+            )
+            assert failed.json()["status"] == "FAILED"
+            assert failed.json()["error_code"] == "TOOL_DISABLED"
+            denied_calls = await client.get(
+                "/api/v1/admin/tool-calls", params={"run_id": continued.json()["run_id"]}
+            )
+            assert denied_calls.json()[0]["status"] == "DENIED"
+            assert (
+                await client.patch("/api/v1/admin/tools/calculator.add", json={"enabled": True})
+            ).status_code == 200
 
             removed_permissions = await client.put(
                 f"/api/v1/admin/applications/{application_id}/permissions",

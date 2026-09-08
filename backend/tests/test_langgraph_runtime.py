@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterator, Sequence
+from dataclasses import replace
 from typing import Any
 from uuid import uuid4
 
@@ -19,10 +20,14 @@ import agentplane.runtime.langgraph as langgraph_runtime
 from agentplane.config import Settings
 from agentplane.runtime import RuntimeDefinition, RuntimeEvent, RuntimeRunRequest
 from agentplane.runtime.langgraph import LangGraphRuntimeAdapter
+from agentplane.tool_contracts import ToolExecutionError
+from agentplane.tools import snapshot_tool_bindings
 
 
 class StreamingToolFakeModel(BaseChatModel):
     calls: int = 0
+    tool_name: str = "calculator_add"
+    tool_arguments: str = '{"a": 1, "b": 2}'
     received_messages: list[list[BaseMessage]] = Field(default_factory=list)
 
     @property
@@ -53,9 +58,9 @@ class StreamingToolFakeModel(BaseChatModel):
                     content="",
                     tool_call_chunks=[
                         {
-                            "name": "calculator_add",
+                            "name": self.tool_name,
                             "index": 0,
-                            "args": '{"a": 1, "b": 2}',
+                            "args": self.tool_arguments,
                             "id": "call_1",
                         }
                     ],
@@ -120,6 +125,7 @@ def _request(*, instructions: str = "使用安全工具", tool_keys: list[str]) 
             instructions=instructions,
             model_alias="default",
             tool_keys=tool_keys,
+            tool_bindings=snapshot_tool_bindings(tool_keys),
         ),
     )
 
@@ -145,7 +151,16 @@ async def test_langgraph_runtime_preserves_stream_event_contract(
     async def emit(event: RuntimeEvent) -> None:
         events.append(event)
 
-    result = await runtime.start_run(_request(tool_keys=["calculator.add"]), emit, _not_cancelled)
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    async def execute(key: str, version: str, arguments: dict[str, Any]) -> str:
+        calls.append((key, version, arguments))
+        await emit(RuntimeEvent("tool.started", {"tool": key, "version": version}))
+        await emit(RuntimeEvent("tool.completed", {"tool": key, "status": "SUCCEEDED"}))
+        return "3"
+
+    request = replace(_request(tool_keys=["calculator.add"]), execute_tool=execute)
+    result = await runtime.start_run(request, emit, _not_cancelled)
 
     assert result.output_text == "算好了"
     assert [event.event_type for event in events] == [
@@ -156,11 +171,12 @@ async def test_langgraph_runtime_preserves_stream_event_contract(
         "model.delta",
     ]
     assert events[0].payload == {
-        "tool": "calculator_add",
-        "input": {"a": 1, "b": 2},
+        "tool": "calculator.add",
+        "version": "1.0.0",
     }
-    assert events[1].payload["tool"] == "calculator_add"
-    assert "3" in events[1].payload["output"]
+    assert events[1].payload["tool"] == "calculator.add"
+    assert calls == [("calculator.add", "1.0.0", {"a": 1, "b": 2})]
+    assert all("input" not in event.payload and "output" not in event.payload for event in events)
     assert [event.payload["delta"] for event in events[2:]] == ["算", "好", "了"]
     assert isinstance(model.received_messages[0][0], SystemMessage)
     assert model.received_messages[0][0].content == "使用安全工具"
@@ -194,3 +210,28 @@ async def test_langgraph_runtime_limits_concurrent_model_calls(
 
     assert [result.output_text for result in results] == ["完成", "完成"]
     assert model.max_active_calls == 1
+
+
+async def test_unknown_model_tool_is_rejected_through_audit_gateway(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = StreamingToolFakeModel(tool_name="arbitrary_sql")
+
+    def build_fake_model(**_kwargs: Any) -> BaseChatModel:
+        return model
+
+    monkeypatch.setattr(langgraph_runtime, "ChatOpenAI", build_fake_model)
+    calls: list[str] = []
+
+    async def execute(key: str, _version: str, _arguments: dict[str, Any]) -> str:
+        calls.append(key)
+        raise ToolExecutionError("TOOL_NOT_GRANTED")
+
+    async def emit(_event: RuntimeEvent) -> None:
+        pass
+
+    runtime = LangGraphRuntimeAdapter(Settings(model_api_key="test", model_name="test"))
+    request = replace(_request(tool_keys=["calculator.add"]), execute_tool=execute)
+    with pytest.raises(ToolExecutionError, match="TOOL_NOT_GRANTED"):
+        await runtime.start_run(request, emit, _not_cancelled)
+    assert calls == ["unregistered:arbitrary_sql"]

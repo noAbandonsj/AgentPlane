@@ -2102,6 +2102,273 @@
           }
         }
       }
+    },
+    "/api/v1/admin/tools": {
+      "get": {
+        "tags": [
+          "tool-management"
+        ],
+        "summary": "Tools List",
+        "operationId": "tools_list_api_v1_admin_tools_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ToolMetadata"
+                  },
+                  "type": "array",
+                  "title": "Response Tools List Api V1 Admin Tools Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/tools/{tool_key}/versions": {
+      "get": {
+        "tags": [
+          "tool-management"
+        ],
+        "summary": "Versions List",
+        "operationId": "versions_list_api_v1_admin_tools__tool_key__versions_get",
+        "parameters": [
+          {
+            "name": "tool_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tool Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ToolMetadata"
+                  },
+                  "title": "Response Versions List Api V1 Admin Tools  Tool Key  Versions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/tools/{tool_key}": {
+      "patch": {
+        "tags": [
+          "tool-management"
+        ],
+        "summary": "Tool Patch",
+        "operationId": "tool_patch_api_v1_admin_tools__tool_key__patch",
+        "parameters": [
+          {
+            "name": "tool_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tool Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolPolicyPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolMetadata"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/tool-calls": {
+      "get": {
+        "tags": [
+          "tool-management"
+        ],
+        "summary": "Calls List",
+        "operationId": "calls_list_api_v1_admin_tool_calls_get",
+        "parameters": [
+          {
+            "name": "tool_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tool Key"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "application_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Application Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ToolCallStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ToolCallRead"
+                  },
+                  "title": "Response Calls List Api V1 Admin Tool Calls Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2364,6 +2631,13 @@
             "type": "array",
             "title": "Tool Keys"
           },
+          "tool_bindings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Tool Bindings"
+          },
           "published_at": {
             "type": "string",
             "format": "date-time",
@@ -2385,6 +2659,7 @@
           "instructions",
           "model_alias",
           "tool_keys",
+          "tool_bindings",
           "published_at",
           "published_by"
         ],
@@ -3282,6 +3557,13 @@
             "type": "array",
             "title": "Effective Tool Keys"
           },
+          "tool_bindings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Tool Bindings"
+          },
           "output_text": {
             "anyOf": [
               {
@@ -3410,6 +3692,7 @@
           "status",
           "input_text",
           "effective_tool_keys",
+          "tool_bindings",
           "output_text",
           "error_code",
           "error_message",
@@ -3519,6 +3802,143 @@
         ],
         "title": "SessionStatus"
       },
+      "ToolCallRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "application_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Id"
+          },
+          "trace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Trace Id"
+          },
+          "tool_key": {
+            "type": "string",
+            "title": "Tool Key"
+          },
+          "tool_version": {
+            "type": "string",
+            "title": "Tool Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "STARTED",
+              "SUCCEEDED",
+              "DENIED",
+              "FAILED",
+              "TIMED_OUT",
+              "CANCELLED",
+              "INTERRUPTED"
+            ],
+            "title": "Status"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "input_summary": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Input Summary"
+          },
+          "output_summary": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Output Summary"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "user_id",
+          "application_id",
+          "trace_id",
+          "tool_key",
+          "tool_version",
+          "status",
+          "error_code",
+          "input_summary",
+          "output_summary",
+          "duration_ms",
+          "created_at",
+          "completed_at"
+        ],
+        "title": "ToolCallRead"
+      },
+      "ToolCallStatus": {
+        "type": "string",
+        "enum": [
+          "STARTED",
+          "SUCCEEDED",
+          "DENIED",
+          "FAILED",
+          "TIMED_OUT",
+          "CANCELLED",
+          "INTERRUPTED"
+        ],
+        "title": "ToolCallStatus"
+      },
       "ToolGrantReplace": {
         "properties": {
           "tool_keys": {
@@ -3559,6 +3979,36 @@
           "requires_approval": {
             "type": "boolean",
             "title": "Requires Approval"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": "1.0.0"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": true
+          },
+          "timeout_seconds": {
+            "type": "number",
+            "title": "Timeout Seconds",
+            "default": 10
+          },
+          "input_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Input Schema"
+          },
+          "output_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Output Schema"
           }
         },
         "type": "object",
@@ -3570,6 +4020,20 @@
           "requires_approval"
         ],
         "title": "ToolMetadata"
+      },
+      "ToolPolicyPatch": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "ToolPolicyPatch"
       },
       "UserPermissionsRead": {
         "properties": {

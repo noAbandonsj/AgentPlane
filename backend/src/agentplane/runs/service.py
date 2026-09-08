@@ -125,6 +125,11 @@ async def _create_run_for_session(
         agent_version_id=chat_session.agent_version_id,
         input_text=input_text,
         effective_tool_keys=effective_tool_keys,
+        tool_bindings={
+            key: version.tool_bindings[key]
+            for key in effective_tool_keys
+            if key in version.tool_bindings
+        },
         model_name=settings.model_name,
     )
     message = SessionMessage(

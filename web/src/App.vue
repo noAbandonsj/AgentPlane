@@ -7,6 +7,7 @@ import {
   Document,
   Fold,
   Operation,
+  Tools,
   SwitchButton,
   UserFilled,
 } from '@element-plus/icons-vue'
@@ -48,6 +49,7 @@ function onUserCommand(command: string) {
             {{ store.navigationCollapsed ? '—' : '管理' }}
           </div>
           <el-menu-item index="/agents"><el-icon><Operation /></el-icon><span>Agent 管理</span></el-menu-item>
+          <el-menu-item index="/admin/tools"><el-icon><Tools /></el-icon><span>工具管理</span></el-menu-item>
           <el-menu-item index="/admin/applications"><el-icon><Connection /></el-icon><span>调用应用</span></el-menu-item>
           <el-menu-item index="/admin/invocations"><el-icon><Document /></el-icon><span>调用记录</span></el-menu-item>
           <el-menu-item index="/admin/users"><el-icon><UserFilled /></el-icon><span>用户与权限</span></el-menu-item>

@@ -82,6 +82,16 @@ class InvocationDecision(StrEnum):
     DENIED = "DENIED"
 
 
+class ToolCallStatus(StrEnum):
+    STARTED = "STARTED"
+    SUCCEEDED = "SUCCEEDED"
+    DENIED = "DENIED"
+    FAILED = "FAILED"
+    TIMED_OUT = "TIMED_OUT"
+    CANCELLED = "CANCELLED"
+    INTERRUPTED = "INTERRUPTED"
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
@@ -357,6 +367,7 @@ class AgentVersion(Base):
     instructions: Mapped[str] = mapped_column(Text, nullable=False)
     model_alias: Mapped[str] = mapped_column(String(100), nullable=False)
     tool_keys: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    tool_bindings: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False, default=dict)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     published_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
 
@@ -537,6 +548,7 @@ class TaskRun(Base):
     )
     input_text: Mapped[str] = mapped_column(Text, nullable=False)
     effective_tool_keys: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    tool_bindings: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False, default=dict)
     output_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -607,6 +619,47 @@ class Invocation(Base):
         Uuid, ForeignKey("task_runs.id", ondelete="SET NULL"), nullable=True, unique=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class TenantToolPolicy(Base, TimestampMixin):
+    __tablename__ = "tenant_tool_policies"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True
+    )
+    tool_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    updated_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+
+
+class ToolCall(Base):
+    __tablename__ = "tool_calls"
+    __table_args__ = (
+        Index("ix_tool_calls_tenant_created", "tenant_id", "created_at", "id"),
+        Index("ix_tool_calls_run_status", "run_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("task_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    application_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    trace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    tool_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    tool_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[ToolCallStatus] = mapped_column(
+        SAEnum(ToolCallStatus, native_enum=False, length=20), nullable=False
+    )
+    error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    input_summary: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    output_summary: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class RunEvent(Base):

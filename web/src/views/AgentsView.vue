@@ -168,7 +168,7 @@ onMounted(load)
         <el-form-item label="模型别名"><el-input v-model="form.modelAlias" disabled /><div class="muted">首版只开放 default，真实模型从服务端环境变量读取。</div></el-form-item>
         <el-form-item label="声明工具（能力上限）">
           <el-checkbox-group v-model="form.toolKeys">
-            <el-checkbox v-for="tool in tools" :key="tool.key" :value="tool.key"><strong>{{ tool.name }}</strong><span class="muted"> — {{ tool.description }}</span></el-checkbox>
+            <el-checkbox v-for="tool in tools" :key="tool.key" :value="tool.key"><strong>{{ tool.name }}</strong><span class="muted"> — {{ tool.description }}{{ tool.enabled === false ? '（已停用）' : '' }}</span></el-checkbox>
           </el-checkbox-group>
         </el-form-item>
       </el-form>
@@ -185,6 +185,7 @@ onMounted(load)
             <el-descriptions-item label="名称">{{ version.name }}</el-descriptions-item>
             <el-descriptions-item label="模型">{{ version.model_alias }}</el-descriptions-item>
             <el-descriptions-item label="声明工具">{{ version.tool_keys.join('、') || '无' }}</el-descriptions-item>
+            <el-descriptions-item label="固定工具版本">{{ Object.entries(version.tool_bindings ?? {}).map(([key, value]) => `${key}@${value}`).join('、') || '无' }}</el-descriptions-item>
             <el-descriptions-item label="系统指令"><div style="white-space: pre-wrap">{{ version.instructions }}</div></el-descriptions-item>
           </el-descriptions>
         </el-collapse-item>

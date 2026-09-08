@@ -344,6 +344,7 @@ class AgentVersionRead(ApiModel):
     instructions: str
     model_alias: str
     tool_keys: list[str]
+    tool_bindings: dict[str, str]
     published_at: datetime
     published_by: UUID
 
@@ -354,6 +355,36 @@ class ToolMetadata(BaseModel):
     description: str
     risk_level: Literal["LOW", "MEDIUM", "HIGH"]
     requires_approval: bool
+    version: str = "1.0.0"
+    enabled: bool = True
+    read_only: bool = True
+    timeout_seconds: float = 10
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    output_schema: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolPolicyPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool
+
+
+class ToolCallRead(ApiModel):
+    id: UUID
+    run_id: UUID
+    user_id: UUID
+    application_id: UUID | None
+    trace_id: UUID
+    tool_key: str
+    tool_version: str
+    status: Literal[
+        "STARTED", "SUCCEEDED", "DENIED", "FAILED", "TIMED_OUT", "CANCELLED", "INTERRUPTED"
+    ]
+    error_code: str | None
+    input_summary: dict[str, Any]
+    output_summary: dict[str, Any]
+    duration_ms: int | None
+    created_at: datetime
+    completed_at: datetime | None
 
 
 class SessionCreate(BaseModel):
@@ -462,6 +493,7 @@ class RunRead(ApiModel):
     status: RunStatus
     input_text: str
     effective_tool_keys: list[str]
+    tool_bindings: dict[str, str]
     output_text: str | None
     error_code: str | None
     error_message: str | None

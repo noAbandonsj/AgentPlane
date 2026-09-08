@@ -26,6 +26,16 @@ export type Message = components['schemas']['MessageRead']
 export type Run = components['schemas']['RunRead']
 export type Session = components['schemas']['SessionRead']
 export type ToolMetadata = components['schemas']['ToolMetadata']
+export type ToolCall = components['schemas']['ToolCallRead']
+export interface ToolCallFilters {
+  toolKey?: string
+  runId?: string
+  userId?: string
+  applicationId?: string
+  status?: string
+  limit?: number
+  offset?: number
+}
 export type User = components['schemas']['UserRead']
 export type UserPermissions = components['schemas']['UserPermissionsRead']
 export type UserStatus = components['schemas']['UserStatus']

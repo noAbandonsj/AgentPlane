@@ -6,14 +6,22 @@ from typing import Any
 from uuid import UUID
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRequest, ModelResponse, wrap_model_call
+from langchain.agents.middleware import (
+    ModelRequest,
+    ModelResponse,
+    ToolCallRequest,
+    wrap_model_call,
+    wrap_tool_call,
+)
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
     BaseMessage,
     HumanMessage,
+    ToolMessage,
 )
 from langchain_openai import ChatOpenAI
+from langgraph.types import Command
 from pydantic import SecretStr
 
 from agentplane.config import Settings
@@ -27,6 +35,7 @@ from agentplane.runtime.base import (
     RuntimeResult,
     RuntimeRunRequest,
 )
+from agentplane.tool_contracts import ToolExecutionError
 from agentplane.tools import build_langchain_tools, validate_tool_keys
 
 
@@ -60,8 +69,15 @@ class LangGraphRuntimeAdapter(AgentRuntimeAdapter):
             raise ValueError(f"首版不支持模型别名: {definition.model_alias}")
         validate_tool_keys(definition.tool_keys)
 
-    def _build_graph(self, definition: RuntimeDefinition) -> Any:
-        tools = build_langchain_tools(definition.tool_keys)
+    def _build_graph(self, request: RuntimeRunRequest) -> Any:
+        definition = request.definition
+        if set(definition.tool_bindings) != set(definition.tool_keys):
+            raise ToolExecutionError("TOOL_VERSION_UNAVAILABLE")
+        tools = build_langchain_tools(definition.tool_bindings, request.execute_tool)
+        bindings_by_name = {
+            tool.name: binding
+            for tool, binding in zip(tools, definition.tool_bindings.items(), strict=True)
+        }
         model = ChatOpenAI(
             model=self.settings.model_name,
             api_key=SecretStr(self.settings.model_api_key),
@@ -78,11 +94,32 @@ class LangGraphRuntimeAdapter(AgentRuntimeAdapter):
             async with self._model_semaphore:
                 return await handler(request)
 
+        @wrap_tool_call
+        async def execute_authorized_tool(
+            call: ToolCallRequest,
+            _handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]],
+        ) -> ToolMessage | Command[Any]:
+            if request.execute_tool is None:
+                raise ToolExecutionError("TOOL_CONTEXT_MISSING")
+            binding = bindings_by_name.get(call.tool_call["name"])
+            if binding is None:
+                # An unregistered model name must never resolve to an executable binding.
+                await request.execute_tool(
+                    f"unregistered:{call.tool_call['name']}", "unknown", call.tool_call["args"]
+                )
+                raise ToolExecutionError("TOOL_NOT_GRANTED")
+            # Validate original model arguments before framework injection can strip reserved
+            # names such as callbacks/run_manager. Identity lives only in the bound executor.
+            output = await request.execute_tool(*binding, call.tool_call["args"])
+            return ToolMessage(
+                content=output, name=call.tool_call["name"], tool_call_id=call.tool_call["id"]
+            )
+
         return create_agent(
             model=model,
             tools=tools,
             system_prompt=definition.instructions,
-            middleware=[limit_model_concurrency],
+            middleware=[limit_model_concurrency, execute_authorized_tool],
         )
 
     @staticmethod
@@ -121,7 +158,7 @@ class LangGraphRuntimeAdapter(AgentRuntimeAdapter):
             raise RuntimeError("MODEL_NOT_CONFIGURED")
         if await is_cancelled():
             raise RuntimeCancelled
-        graph = self._build_graph(request.definition)
+        graph = self._build_graph(request)
         graph_input = {"messages": self._input_messages(request)}
         final_messages: list[Any] | None = None
         async for event in graph.astream_events(
@@ -139,20 +176,7 @@ class LangGraphRuntimeAdapter(AgentRuntimeAdapter):
                     text = _content_to_text(chunk.content)
                     if text:
                         await emit(RuntimeEvent("model.delta", {"delta": text}))
-            elif event_name == "on_tool_start":
-                await emit(
-                    RuntimeEvent(
-                        "tool.started",
-                        {"tool": event.get("name"), "input": data.get("input")},
-                    )
-                )
-            elif event_name == "on_tool_end":
-                await emit(
-                    RuntimeEvent(
-                        "tool.completed",
-                        {"tool": event.get("name"), "output": str(data.get("output"))},
-                    )
-                )
+            # Tool events come from the audited executor; framework events contain raw data.
             elif event_name == "on_chain_end" and not event.get("parent_ids"):
                 output = data.get("output")
                 if isinstance(output, dict) and isinstance(output.get("messages"), list):

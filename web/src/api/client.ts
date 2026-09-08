@@ -25,6 +25,8 @@ import type {
   Run,
   Session,
   ToolMetadata,
+  ToolCall,
+  ToolCallFilters,
   User,
   UserPermissions,
   UserStatus,
@@ -75,6 +77,24 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  listAdminTools: () => request<ToolMetadata[]>('/admin/tools'),
+  listToolVersions: (key: string) =>
+    request<ToolMetadata[]>(`/admin/tools/${encodeURIComponent(key)}/versions`),
+  setToolEnabled: (key: string, enabled: boolean) =>
+    request<ToolMetadata>(`/admin/tools/${encodeURIComponent(key)}`, {
+      method: 'PATCH', body: JSON.stringify({ enabled }),
+    }),
+  listToolCalls: (filters: ToolCallFilters = {}) => {
+    const query = new URLSearchParams()
+    for (const [key, value] of Object.entries({
+      tool_key: filters.toolKey, run_id: filters.runId, user_id: filters.userId,
+      application_id: filters.applicationId, status: filters.status,
+      limit: filters.limit, offset: filters.offset,
+    })) {
+      if (value !== undefined && value !== '') query.set(key, String(value))
+    }
+    return request<ToolCall[]>(`/admin/tool-calls?${query.toString()}`)
+  },
   bootstrapStatus: () => request<BootstrapStatus>('/auth/bootstrap-status'),
   bootstrapAdmin: (payload: AuthRegister) =>
     request<User>('/auth/bootstrap-admin', { method: 'POST', body: JSON.stringify(payload) }),

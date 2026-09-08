@@ -115,6 +115,7 @@ onBeforeUnmount(() => closeStream?.())
           <el-descriptions-item label="输入 Token">{{ run.input_tokens ?? '—' }}</el-descriptions-item>
           <el-descriptions-item label="输出 Token">{{ run.output_tokens ?? '—' }}</el-descriptions-item>
           <el-descriptions-item label="有效工具" :span="2">{{ run.effective_tool_keys.join('、') || '无' }}</el-descriptions-item>
+          <el-descriptions-item label="工具版本" :span="2">{{ Object.entries(run.tool_bindings ?? {}).map(([key, value]) => `${key}@${value}`).join('、') || '无' }}</el-descriptions-item>
         </el-descriptions>
         <h3>输入</h3><pre>{{ run.input_text }}</pre>
         <template v-if="run.output_text"><h3>输出</h3><pre>{{ run.output_text }}</pre></template>

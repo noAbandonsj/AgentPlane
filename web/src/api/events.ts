@@ -5,6 +5,7 @@ export const runEventTypes = [
   'model.delta',
   'tool.started',
   'tool.completed',
+  'tool.failed',
   'run.completed',
   'run.failed',
   'run.cancelled',
